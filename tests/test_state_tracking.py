@@ -1,7 +1,8 @@
 import pytest
 from enum import Enum
-from src.flowstab.state_tracking import StateMeta
 from functools import total_ordering
+
+from flowstab.state_tracking import StateMeta
 
 @total_ordering
 class MyStates(Enum):

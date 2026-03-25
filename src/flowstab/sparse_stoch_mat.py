@@ -39,10 +39,9 @@ from scipy.sparse import (
     isspmatrix_csr,
     spmatrix,
 )
-from scipy.sparse._sparsetools import csr_scale_columns, csr_scale_rows
 
 if importlib.util.find_spec("cython") is not None:
-    import _cython_sparse_stoch as _css
+    from . import _cython_sparse_stoch as _css
 else:
     print("Could not load cython functions. Some functionality might be broken.")
     from . import _cython_subst as _css

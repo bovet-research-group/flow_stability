@@ -44,7 +44,7 @@ from .temporal_network import (
 # TODO: use same logic as in 'sparse_stoch_mat'
 USE_CYTHON = True
 if importlib.util.find_spec("cython") is not None:
-    from _cython_fast_funcs import (
+    from ._cython_fast_funcs import (
         compute_S,
         cython_nmi,
         cython_nvi,

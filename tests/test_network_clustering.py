@@ -47,12 +47,6 @@ def test_norm_var_information():
     from flowstab.network_clustering import norm_var_information
     pass
 
-def test_norm_var_information():
-    """
-    """
-    from flowstab.network_clustering import norm_var_information
-    pass
-
 def test_avg_norm_var_information():
     """
     """
