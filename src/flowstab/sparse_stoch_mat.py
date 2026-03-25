@@ -610,63 +610,40 @@ def rebuild_nnz_rowcol(T_small:csr_matrix, nonzero_indices:NDArray,
 
 
 def inplace_csr_matmul_diag(A, diag_vec):
-    """Inplace multiply a csr matrix A with a diag matrix D
-    
-    A = A @ D
-
-    With D = np.diagflat(diag_vec) and A a scipy.sparse.cs[rc]_matrix,
-    i.e. column i of A is scaled by diag_vec[i]
-        
-    """
+    """Multiply a csr matrix A with a diag matrix D: A = A @ D"""
     assert isinstance(diag_vec, np.ndarray)
-
     diag_vec = diag_vec.squeeze()
-
-    assert diag_vec.shape[0] == diag_vec.size
-
     assert A.shape[1] == diag_vec.size, "Invalid array size"
 
-
+    # Use the public sparse.diags and @ operator
+    from scipy import sparse
+    D = sparse.diags(diag_vec)
+    
+    # Note: SciPy sparse matrices are often immutable in structure.
+    # To truly scale "in-place" without full matrix recreation, 
+    # we manually scale the underlying data array:
     if isspmatrix_csr(A):
-
-        csr_scale_columns(A.shape[0], A.shape[1], A.indptr,
-                          A.indices, A.data, diag_vec)
-
+        # Scale columns by repeating diag_vec for each entry in a row
+        A.data *= diag_vec[A.indices]
     elif isspmatrix_csc(A):
-        csr_scale_rows(A.shape[0], A.shape[1], A.indptr,
-                          A.indices, A.data, diag_vec)
-
+        # Scale rows by repeating diag_vec for each entry in a column
+        A.data *= np.repeat(diag_vec, np.diff(A.indptr))
     else:
         raise ValueError("A must be a csr or csc matrix")
 
 
-
-def inplace_diag_matmul_csr(A:csr_matrix | csc_matrix, diag_vec: NDArray)->None:
-    """Inplace multiply a diag matrix D with a csr matrix A:
-    
-    A = D @ A
-        
-    With D = np.diagflat(diag_vec) and A a scipy.sparse.cs[rc]_matrix,
-    i.e. row i of A is scaled by diag_vec[i]
-        
-    """
+def inplace_diag_matmul_csr(A: csr_matrix | csc_matrix, diag_vec: NDArray) -> None:
+    """Multiply a diag matrix D with a csr matrix A: A = D @ A"""
     assert isinstance(diag_vec, np.ndarray)
-
     diag_vec = diag_vec.squeeze()
-
-    assert diag_vec.shape[0] == diag_vec.size
-
-    assert A.shape[1] == diag_vec.size, "Invalid array size"
-
+    assert A.shape[0] == diag_vec.size, "Invalid array size"
 
     if isspmatrix_csr(A):
-        csr_scale_rows(A.shape[0], A.shape[1], A.indptr,
-                       A.indices, A.data, diag_vec)
-
+        # Scale rows: each element in row i is scaled by diag_vec[i]
+        A.data *= np.repeat(diag_vec, np.diff(A.indptr))
     elif isspmatrix_csc(A):
-        csr_scale_columns(A.shape[0], A.shape[1], A.indptr,
-                          A.indices, A.data, diag_vec)
-
+        # Scale columns: each element in col j is scaled by diag_vec[j]
+        A.data *= diag_vec[A.indices]
     else:
         raise ValueError("A must be a csr or csc matrix")
 
