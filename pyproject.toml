@@ -81,3 +81,14 @@ wheel.exclude = [
 
 [tool.setuptools_scm]
 # Configuration for dynamic version extraction from source control
+
+[tool.coverage.run]
+relative_files = true
+source = ["src"]
+omit = ["**/_cython_subst.py"] # Optional: omit fallback files if desired
+
+[tool.coverage.paths]
+source = [
+    "src/flowstab",
+    "**/site-packages/flowstab"
+]
