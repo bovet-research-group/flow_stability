@@ -1,11 +1,18 @@
 import pytest
 import numpy as np
 import tracemalloc
-
+from scipy import sparse
 from copy import copy
 
 from scipy.sparse import (
     eye,
+)
+
+from flowstab.sparse_stoch_mat import (
+    _inplace_csr_matmul_diag, 
+    inplace_csr_matmul_diag,
+    _inplace_diag_matmul_csr,
+    inplace_diag_matmul_csr
 )
 
 def test_timing(capfd):
@@ -119,38 +126,50 @@ def test_SSM_from_full_csr_equivalence(get_csr_matrix_large):
         sparse_stoch_from_full_csr as sparse_stoch_from_full_csr
     )
     A_csr, _ = get_csr_matrix_large
+
     A_csr_data = A_csr.data.astype(np.float64)
     diag_val = 1.0
+    
+    # Assume eye is imported from scipy.sparse in the module scope
     nz_rows, nz_cols = (
         A_csr - diag_val * eye(A_csr.shape[0], format="csr")
     ).nonzero()
     nz_rowcols = np.union1d(nz_rows, nz_cols)
+    
+    # Explicitly downcast to 32-bit integers to satisfy Cython int[:] signatures
+    csr_indices_int32 = A_csr.indices.astype(np.int32, copy=False)
+    csr_indptr_int32 = A_csr.indptr.astype(np.int32, copy=False)
+    nz_rowcols_int32 = np.array(nz_rowcols, dtype=np.int32)
+    
     (
         c_size, c_data, c_indices,
         c_indptr, c_nz_rowcols, c_diag_val
     ) = _css.sparse_stoch_from_full_csr(
-            np.array(nz_rowcols, dtype=np.int32),
-            A_csr_data,
-            A_csr.indices.astype(np.int64),
-            A_csr.indptr,
-            diag_val
-        )
+        nz_rowcols_int32,
+        A_csr_data,
+        csr_indices_int32,
+        csr_indptr_int32,
+        diag_val
+    )
+    
     (
         nc_size, nc_data, nc_indices,
         nc_indptr, nc_nz_rowcols, nc_diag_val
     ) = sparse_stoch_from_full_csr(
-            np.array(nz_rowcols, dtype=np.int32),
-            A_csr_data,
-            A_csr.indices,
-            A_csr.indptr,
-            diag_val
-        )
+        nz_rowcols_int32,
+        A_csr_data,
+        csr_indices_int32,
+        csr_indptr_int32,
+        diag_val
+    )
+    
     assert nc_size == c_size
     assert nc_diag_val == c_diag_val
     np.testing.assert_array_equal(nc_data, c_data)
     np.testing.assert_array_equal(nc_indices, c_indices)
     np.testing.assert_array_equal(nc_indptr, c_indptr)
     np.testing.assert_array_equal(nc_nz_rowcols, c_nz_rowcols)
+
 
 def test_SSM_inplace_row_normalize_equivalence(SSM_matrix_creator):
     """Make sure the cython and pure python implementations are equivalent
@@ -162,18 +181,43 @@ def test_SSM_inplace_row_normalize_equivalence(SSM_matrix_creator):
         inplace_csr_row_normalize
     )
     A_ssm1 = SSM_matrix_creator(nbr=1)[0]
+    
+    # EXPLICIT CAST: Enforce 64-bit integers to satisfy Cython 'long long[:]'
+    A_ssm1.T_small.indptr = A_ssm1.T_small.indptr.astype(np.int64, copy=False)
+    A_ssm1.T_small.indices = A_ssm1.T_small.indices.astype(np.int64, copy=False)
+    
     A_ssm1_data = copy(A_ssm1.T_small.data)
+    
     A_ssm2 = copy(A_ssm1)
+    
+    # Enforce cast on the copy as well
+    A_ssm2.T_small.indptr = A_ssm2.T_small.indptr.astype(np.int64, copy=False)
+    A_ssm2.T_small.indices = A_ssm2.T_small.indices.astype(np.int64, copy=False)
+    
     A_ssm2_data = copy(A_ssm2.T_small.data)
+    
     # the cython implementation
-    _css.inplace_csr_row_normalize(A_ssm1.T_small.data, A_ssm1.T_small.indptr, A_ssm1.T_small.shape[0], 1.0)
+    _css.inplace_csr_row_normalize(
+        A_ssm1.T_small.data, 
+        A_ssm1.T_small.indptr, 
+        A_ssm1.T_small.shape[0], 
+        1.0
+    )
+    
     # pure python
-    inplace_csr_row_normalize(A_ssm2.T_small.data, A_ssm2.T_small.indptr, A_ssm2.T_small.shape[0], 1.0)
-    # test change
+    inplace_csr_row_normalize(
+        A_ssm2.T_small.data, 
+        A_ssm2.T_small.indptr, 
+        A_ssm2.T_small.shape[0], 
+        1.0
+    )
+    
+    # test change (assuming the matrix creator yields already-normalized matrices)
     np.testing.assert_array_equal(A_ssm1_data, A_ssm1.T_small.data)
     np.testing.assert_array_equal(A_ssm2_data, A_ssm2.T_small.data)
-    # test equivalence
-    np.testing.assert_array_equal(A_ssm1.data, A_ssm2.T_small.data)
+    
+    # test equivalence (fixed typo A_ssm1.data -> A_ssm1.T_small.data)
+    np.testing.assert_array_equal(A_ssm1.T_small.data, A_ssm2.T_small.data)
 
 def test_rebuild_nnz_rowcol(cs_matrix_creator, compare_alike):
     """Test conversions from ssm to csr and back
@@ -337,3 +381,75 @@ def test_sparse_matmul_memory(cs_matrix_creator):
     A, B = cs_matrix_creator(nbr=2)
     for _ in range(1000):
         _ = A @ B
+
+
+# ###
+# ###
+# ###
+# ###
+# ###
+
+
+def test_inplace_csr_matmul_diag_equivalence(random_sparse_matrix):
+    """Test A @ D (column scaling) produces identical results in both versions."""
+    A_dense, A_sparse = random_sparse_matrix
+    
+    # Generate test-specific scaling vector based on matrix dimensions
+    col_vec = np.random.rand(A_sparse.shape[1])
+    
+    # Because operations are in-place, we must copy the matrix for each function
+    A_old = A_sparse.copy()
+    A_new = A_sparse.copy()
+    
+    # 1. Run old function and catch the expected deprecation warning
+    with pytest.warns(DeprecationWarning, match="is deprecated"):
+        _inplace_csr_matmul_diag(A_old, col_vec)
+        
+    # 2. Run new function
+    inplace_csr_matmul_diag(A_new, col_vec)
+    
+    # 3. Assert exact equivalence between old and new
+    np.testing.assert_allclose(
+        A_old.toarray(), 
+        A_new.toarray(), 
+        err_msg="New column scaling implementation output differs from legacy version."
+    )
+    
+    # 4. (Optional but recommended) Validate both against standard dense math
+    expected_dense = A_dense @ np.diag(col_vec)
+    np.testing.assert_allclose(A_new.toarray(), expected_dense, err_msg="New version differs from dense math baseline.")
+
+def test_inplace_diag_matmul_csr_equivalence(random_sparse_matrix):
+    """Test D @ A (row scaling) produces identical results in both versions."""
+    A_dense, A_sparse = random_sparse_matrix
+    
+    # Generate test-specific scaling vector based on matrix row dimension
+    row_vec = np.random.rand(A_sparse.shape[0])
+    
+    A_old = A_sparse.copy()
+    A_new = A_sparse.copy()
+    
+    with pytest.warns(DeprecationWarning, match="is deprecated"):
+        _inplace_diag_matmul_csr(A_old, row_vec)
+        
+    inplace_diag_matmul_csr(A_new, row_vec)
+    
+    np.testing.assert_allclose(
+        A_old.toarray(), 
+        A_new.toarray(), 
+        err_msg="New row scaling implementation output differs from legacy version."
+    )
+    
+    expected_dense = np.diag(row_vec) @ A_dense
+    np.testing.assert_allclose(A_new.toarray(), expected_dense, err_msg="New version differs from dense math baseline.")
+
+def test_dimensional_assertions():
+    """Verify assertions catch dimension mismatches in the new implementation."""
+    A = sparse.csr_matrix(np.ones((5, 3)))
+    wrong_vec = np.ones(4)
+    
+    with pytest.raises(AssertionError):
+        inplace_csr_matmul_diag(A, wrong_vec)
+        
+    with pytest.raises(AssertionError):
+        inplace_diag_matmul_csr(A, wrong_vec)

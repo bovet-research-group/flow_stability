@@ -520,7 +520,7 @@ def inplace_csr_row_normalize_array(double[:] X_data,
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing
 @cython.cdivision(True)
-def cython_inplace_csr_row_normalize_triu(double[:] X_data,
+def _cython_inplace_csr_row_normalize_triu(double[:] X_data,
                                      long long [:] X_indptr,
                                      long long [:] X_indices,
                                      Py_ssize_t n_row,
@@ -538,7 +538,7 @@ def cython_inplace_csr_row_normalize_triu(double[:] X_data,
         
         Call:
         -----
-        cython_inplace_csr_row_normalize_triu(double[:] X_data,
+        _cython_inplace_csr_row_normalize_triu(double[:] X_data,
                                      int [:] X_indptr,
                                      int [:] X_indices,
                                      Py_ssize_t n_row,
@@ -589,8 +589,71 @@ def cython_inplace_csr_row_normalize_triu(double[:] X_data,
                 else:
                     for j in range(X_indptr[i], X_indptr[i + 1]):
                         X_data[j] /= (sum_/row_sum_tmp)
-                                
+
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing
+@cython.cdivision(True)
+def cython_inplace_csr_row_normalize_triu(double[:] X_data,
+                                     long long [:] X_indptr,
+                                     long long [:] X_indices,
+                                     Py_ssize_t n_row,
+                                     Py_ssize_t n_col,
+                                     double[:] row_sum):
+    """ row normalize scipy sparse csr matrices inplace.
+        This function normalizes the rows of an upper
+        triangular matrix T such that T + T.T - diag(T) is
+        row and columns normalized.
+        
+        Assumes that X_data has only positive values and that X is square.
+        
+        /!| Only works if there are no empty rows where row_sum != 0.
+        
+    """
+    
+    cdef Py_ssize_t i, j, k, c
+    cdef double sum_
+    cdef double row_sum_tmp
+    cdef double[:] col_sum = np.zeros(n_row, dtype=np.float64)
+    cdef double[:] diag = np.zeros(n_row, dtype=np.float64)
+    
+    assert n_row == n_col
+    
+    # we have to normalize rows a number of times equal to the number of
+    # non-zero row_sum values
+    
+    for k in range(n_row):
+        if row_sum[k] != 0.0:
+            
+            # Reset arrays internally
+            for i in range(n_row):
+                diag[i] = 0.0
+                col_sum[i] = 0.0
                 
+            # Single-pass computation of diagonal and column sums
+            for i in range(n_row):
+                for j in range(X_indptr[i], X_indptr[i + 1]):
+                    c = X_indices[j]
+                    if c == i:
+                        diag[i] = X_data[j]
+                    col_sum[c] += X_data[j]
+                        
+            for i in range(k, n_row):
+
+                row_sum_tmp = row_sum[i] + diag[i] - col_sum[i]
+                sum_ = 0.0
+        
+                for j in range(X_indptr[i], X_indptr[i + 1]):
+                    sum_ += X_data[j]
+        
+                if sum_ == 0.0:
+                    continue
+                    
+                else:
+                    for j in range(X_indptr[i], X_indptr[i + 1]):
+                        X_data[j] /= (sum_ / row_sum_tmp)                               
+                
+
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing
 def sparse_stoch_from_full_csr(int[:] nz_rowcols,

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, csc_matrix
 
+
 @pytest.fixture(scope='function')
 def get_csr_matrix_small():
     """Creat an exemplary csr matrix that can be used for testing
@@ -188,3 +189,19 @@ def minimal_temp_network():
                        "starting_times": [0],
                        "ending_times": [1]})
     return ContTempNetwork(events_table=df)
+
+@pytest.fixture(params=["csr", "csc"])
+def sparse_format(request):
+    """Parameterize tests to run against both CSR and CSC formats."""
+    return request.param
+
+@pytest.fixture
+def random_sparse_matrix(sparse_format):
+    """Generates a generic random 10x8 sparse matrix and its dense equivalent."""
+    np.random.seed(42)
+    A_dense = np.random.rand(10, 10)
+    A_dense[A_dense < 0.7] = 0.0
+    
+    if sparse_format == "csr":
+        return A_dense, csr_matrix(A_dense)
+    return A_dense, csc_matrix(A_dense)
