@@ -486,7 +486,7 @@ class SparseStochMat:
                 BmI_small = SparseStochMat.from_small_csr_matrix(small_size,
                                                                 B.T_small - \
                                                                     B.diag_val * eye(B.T_small.shape[0],
-                                                                                        format="csr"),
+                                                                                     format="csr"),
                                                                 Bcol_to_Ccol,
                                                                 diag_val=0.0)
 
@@ -736,6 +736,8 @@ class SparseAutocovMat:
                  PT_symmetric:bool=False):
 
         assert isspmatrix_csr(PT)
+        N = PT.shape[0]
+
         if isinstance(p1, np.ndarray) and isinstance(p2, np.ndarray):
             assert not isinstance(p1, np.matrix)
             assert not isinstance(p2, np.matrix)
@@ -743,21 +745,29 @@ class SparseAutocovMat:
             assert len(p1.shape) == 1
             assert PT.shape[0] == PT.shape[1] == p1.size == p2.size,\
                 f"PT.shape[0]={PT.shape[0]}, PT.shape[1]={PT.shape[1]}, p1.size={p1.size}, p2.size={p2.size}"
+
+            # Array Normalization Check
+            assert np.isclose(p1.sum(), 1.0, atol=1e-5), f"Array p1 is not normalized (sum = {p1.sum()})"
+            assert np.isclose(p2.sum(), 1.0, atol=1e-5), f"Array p2 is not normalized (sum = {p2.sum()})"
+
             self.p_scalars = False
-        elif isinstance(p1, (float,int)) and isinstance(p2, (float,int)):
+
+        elif isinstance(p1, (float, int, np.number)) and isinstance(p2, (float, int, np.number)):
+            # Scalar Normalization Check (Mass = scalar * N)
+            assert np.isclose(p1 * N, 1.0, atol=1e-5), f"Scalar p1={p1} is not normalized for N={N}. Expected {1.0/N}"
+            assert np.isclose(p2 * N, 1.0, atol=1e-5), f"Scalar p2={p2} is not normalized for N={N}. Expected {1.0/N}"
+
             self.p_scalars = True
             self.p1p2 = p1*p2
         else:
-            TypeError("p1 and p2 must be two 1D arrays or two scalar")
-
+            raise TypeError("p1 and p2 must be two 1D arrays or two scalars")
 
         self.PT = PT
         self.p1 = p1
         self.p2 = p2
-        self.size = PT.shape[0]
+        self.size = N
         self.PT_symmetric = PT_symmetric
-
-        self.shape = (self.size,self.size)
+        self.shape = (N, N)
 
         self.PT.sort_indices()
 
@@ -778,52 +788,82 @@ class SparseAutocovMat:
 
     @classmethod
     def from_T(cls, T, p1=None, p2=None):
-        """Generate autocovariance matrix from transition matrix T as
+        """Initialization of the autocovariance matrix from a transition matrix.
 
-            S = diag(p1) @ T - p1^T @ p2.
-        
+        The autocovariance matrix $S$ is defined as:
+        $$S = \text{diag}(p_1) T - p_1^T p_2$$
+
+        Probability distributions are automatically normalized to ensure
+        probability mass conservation.
+        If one probability parameter is provided as an array and the other as a
+        scalar, the scalar is broadcast to a uniform array to maintain
+        dimensional parity.
+        If the final state distribution is omitted, it is derived via the
+        Markov property $p_2 = p_1 T$.
+
         Parameters
         ----------
-        T : NxN scipy csr matrix
-            Transition matrix. T[i,j] is the prob to go from i to j between t1 and t2.
-        p1 : numpy ndarray, optional
-            Probability vector (size = N) at t1. Default is p1[i] = 1/N for all i.
-        p2 : numpy ndarray, optional
-            Probability vector (size = N) at t2. Default is p2 = p1 @ T.
-            
+        T : scipy.sparse.csr_matrix
+            Square transition matrix of size $N \times N$.
+        p1 : numpy.ndarray or float, optional
+            Probability distribution at the initial state.
+            If omitted, a uniform distribution scalar $1/N$ is utilized.
+        p2 : numpy.ndarray or float, optional
+            Probability distribution at the final state.
+            If omitted, it is computed from the initial state and the
+            transition matrix.
+
         Returns
         -------
         SparseAutocovMat
-
+            The instantiated sparse autocovariance matrix.
         """
         assert isspmatrix_csr(T)
         assert T.shape[0] == T.shape[1]
 
-        if p1 is not None:
-            assert isinstance(p1,np.ndarray)
-            assert not isinstance(p1,np.matrix)
-            assert len(p1.shape) == 1
-            assert T.shape[0] == p1.size
-        else:
-            p1 = np.ones(T.shape[0])/T.shape[0]
+        N = T.shape[0]
 
-        if p2 is not None:
-            assert isinstance(p2,np.ndarray)
-            assert not isinstance(p2,np.matrix)
-            assert len(p2.shape) == 1
-            assert T.shape[0] == p2.size
-        else:
-            p2 = p1 @ T
+        # Base resolution: If None, use the normalized uniform scalar
+        if p1 is None:
+            p1 = 1.0 / N
+        elif isinstance(p1, np.ndarray):
+            p1 = p1 / p1.sum()
 
+        if p2 is None:
+            if isinstance(p1, (float, int, np.number)):
+                _p1_vec = np.full(N, p1, dtype=np.float64)
+                p2 = _p1_vec @ T
+            else:
+                p2 = p1 @ T
+            # Force normalization of computed vector to eliminate T leakages
+            p2 = p2 / p2.sum()
+        elif isinstance(p2, np.ndarray):
+            p2 = p2 / p2.sum()
+
+        # Parity promotion (Fallback)
+        is_p1_array = isinstance(p1, np.ndarray)
+        is_p2_array = isinstance(p2, np.ndarray)
+
+        if is_p1_array and not is_p2_array:
+            p2 = np.full(N, p2, dtype=np.float64)
+        elif is_p2_array and not is_p1_array:
+            p1 = np.full(N, p1, dtype=np.float64)
+
+        # Apply scaling
         PT = T.copy()
-        inplace_diag_matmul_csr(PT, p1)
+        if isinstance(p1, (float, int, np.number)):
+            _p1_for_matmul = np.full(N, p1, dtype=np.float64)
+        else:
+            _p1_for_matmul = p1
+
+        inplace_diag_matmul_csr(PT, _p1_for_matmul)
 
         return cls(PT=PT, p1=p1, p2=p2)
 
     @classmethod
     def from_T_forward(cls, T:csr_matrix,
-                       p1:Union[None, NDArray]=None,
-                       p2:Union[None, NDArray]=None):
+                       p1:Union[None, float, int, np.number, NDArray]=None,
+                       p2:Union[None, float, int, np.number, NDArray]=None):
         """Generate the forward autocovariance matrix from transition matrix T as
 
             S = diag(p1) @ T @ diag(1/p2) @ T.T @ diag(p1) - p1.T @ p1.
@@ -833,9 +873,9 @@ class SparseAutocovMat:
         ----------
         T : NxN scipy csr matrix
             Transition matrix. T[i,j] is the prob to go from i to j between t1 and t2.
-        p1 : numpy ndarray, optional
+        p1 : numpy ndarray or scalar, optional
             Probability vector (size = N) at t1. Default is p1[i] = 1/N for all i.
-        p2 : numpy ndarray, optional
+        p2 : numpy ndarray or scalar, optional
             Probability vector (size = N) at t2. Default is p2 = p1 @ T.
             
         Returns
@@ -845,41 +885,56 @@ class SparseAutocovMat:
         """
         assert isspmatrix_csr(T)
         assert T.shape[0] == T.shape[1]
+        
+        N = T.shape[0]
 
-        if p1 is not None:
-            assert isinstance(p1,np.ndarray)
-            assert not isinstance(p1,np.matrix)
-            assert len(p1.shape) == 1
-            assert T.shape[0] == p1.size
-            p1_scalar = False
-        else:
-            p1 = np.ones(T.shape[0])/T.shape[0]
+        # 1. Resolve p1 (Initial State)
+        if p1 is None:
+            p1_val = 1.0 / N
+            p1_array = np.full(N, p1_val, dtype=np.float64)
             p1_scalar = True
-
-        if p2 is not None:
-            assert isinstance(p2,np.ndarray)
-            assert not isinstance(p2,np.matrix)
-            assert len(p2.shape) == 1
-            assert T.shape[0] == p2.size
+        elif isinstance(p1, (float, int, np.number)):
+            p1_val = float(p1)
+            p1_array = np.full(N, p1_val, dtype=np.float64)
+            p1_scalar = True
         else:
-            p2 = p1 @ T
+            assert isinstance(p1, np.ndarray)
+            assert not isinstance(p1, np.matrix)
+            assert p1.ndim == 1
+            assert N == p1.size
+            p1_array = p1 / p1.sum()
+            p1_scalar = False
 
-        p2m1 = p2.copy()
-        p2m1[p2m1==0] = 1 # to avoid product of 0 * inf, which gives nan
-        p2m1 = 1/p2m1
+        # 2. Resolve p2 (Final State)
+        if p2 is None:
+            p2_array = p1_array @ T
+            p2_array = p2_array / p2_array.sum()
+        elif isinstance(p2, (float, int, np.number)):
+            p2_val = float(p2)
+            p2_array = np.full(N, p2_val, dtype=np.float64)
+        else:
+            assert isinstance(p2, np.ndarray)
+            assert not isinstance(p2, np.matrix)
+            assert p2.ndim == 1
+            assert N == p2.size
+            p2_array = p2 / p2.sum()
 
+        p2m1 = p2_array.copy()
+        p2m1[p2m1==0] = 1.0 # to avoid product of 0 * inf, which gives nan
+        p2m1 = 1.0 / p2m1
+
+        # 3. Apply Scaling
         PT = T.copy()
-        # T @ diag(1/p2)
-        inplace_csr_matmul_diag(PT,p2m1)
+        inplace_csr_matmul_diag(PT, p2m1)
         PT = PT @ T.T
-        inplace_diag_matmul_csr(PT, p1)
-        inplace_csr_matmul_diag(PT, p1)
+        inplace_diag_matmul_csr(PT, p1_array)
+        inplace_csr_matmul_diag(PT, p1_array)
 
+        # 4. Construct Object
         if p1_scalar:
-            return cls(PT=PT, p1=p1[0], p2=p1[0], PT_symmetric=True)
-
+            return cls(PT=PT, p1=p1_val, p2=p1_val, PT_symmetric=True)
         else:
-            return cls(PT=PT, p1=p1, p2=p1, PT_symmetric=True)
+            return cls(PT=PT, p1=p1_array, p2=p1_array, PT_symmetric=True)
 
     def copy(self):
 
@@ -1021,16 +1076,16 @@ class SparseAutocovMat:
         # choose the fastest version
         if new_size**2 < self.PT.data.size:
             PTdata, PTrows, PTcols, new_size = _css.aggregate_csr_mat(self.PT.data,
-                                                                    self.PT.indices,
-                                                                    self.PT.indptr,
-                                                                    idxs_array,
-                                                                    idxptr)
+                                                                      self.PT.indices,
+                                                                      self.PT.indptr,
+                                                                      idxs_array,
+                                                                      idxptr)
         else:
             PTdata, PTrows, PTcols, new_size = _css.aggregate_csr_mat_2(self.PT.data,
-                                                                    self.PT.indices,
-                                                                    self.PT.indptr,
-                                                                    idxs_array,
-                                                                    idxptr)
+                                                                        self.PT.indices,
+                                                                        self.PT.indptr,
+                                                                        idxs_array,
+                                                                        idxptr)
 
         newPT = coo_matrix((PTdata,(PTrows,PTcols)), shape=(new_size,new_size))
 
