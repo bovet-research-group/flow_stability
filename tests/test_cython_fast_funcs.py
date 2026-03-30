@@ -5,7 +5,7 @@ import numpy as np
 def test_sum_Sto():
     """
     """
-    from _cython_fast_funcs import (
+    from flowstab._cython_fast_funcs import (
         sum_Sto
     )
     # Define a sample S array and ix_cf list for testing purposes.
@@ -21,7 +21,7 @@ def test_sum_Sto():
 def test_sum_Sout():
     """
     """
-    from _cython_fast_funcs import (
+    from flowstab._cython_fast_funcs import (
         sum_Sout
     )
     # Define a sample S array and ix_ci list for testing purposes.
@@ -37,7 +37,7 @@ def test_sum_Sout():
 def test_compute_S(propa_transproba_creator):
     """
     """
-    from _cython_fast_funcs import (
+    from flowstab._cython_fast_funcs import (
         compute_S
     )
     p1, p2, T = propa_transproba_creator(nbr=1,size=1000)[0]

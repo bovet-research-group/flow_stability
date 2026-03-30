@@ -26,6 +26,7 @@ import time
 from collections.abc import Callable
 from copy import copy
 from functools import wraps
+import warnings
 
 from typing import Union
 import numpy as np
@@ -42,7 +43,7 @@ from scipy.sparse import (
 from scipy.sparse._sparsetools import csr_scale_columns, csr_scale_rows
 
 if importlib.util.find_spec("cython") is not None:
-    import _cython_sparse_stoch as _css
+    from . import _cython_sparse_stoch as _css
 else:
     print("Could not load cython functions. Some functionality might be broken.")
     from . import _cython_subst as _css
@@ -485,7 +486,7 @@ class SparseStochMat:
                 BmI_small = SparseStochMat.from_small_csr_matrix(small_size,
                                                                 B.T_small - \
                                                                     B.diag_val * eye(B.T_small.shape[0],
-                                                                                        format="csr"),
+                                                                                     format="csr"),
                                                                 Bcol_to_Ccol,
                                                                 diag_val=0.0)
 
@@ -609,8 +610,7 @@ def rebuild_nnz_rowcol(T_small:csr_matrix, nonzero_indices:NDArray,
     return csr_matrix((data, indices, indptr),
                        shape=(size,size))
 
-
-def inplace_csr_matmul_diag(A, diag_vec):
+def _inplace_csr_matmul_diag(A, diag_vec):
     """Inplace multiply a csr matrix A with a diag matrix D
     
     A = A @ D
@@ -619,12 +619,19 @@ def inplace_csr_matmul_diag(A, diag_vec):
     i.e. column i of A is scaled by diag_vec[i]
         
     """
+    warnings.warn(
+        "_inplace_csr_matmul_diag is deprecated and will be removed. "
+        "Use inplace_csr_matmul_diag instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     assert isinstance(diag_vec, np.ndarray)
 
     diag_vec = diag_vec.squeeze()
 
     assert diag_vec.shape[0] == diag_vec.size
 
+    # TODO: Should this not be shape[0]?
     assert A.shape[1] == diag_vec.size, "Invalid array size"
 
 
@@ -641,8 +648,24 @@ def inplace_csr_matmul_diag(A, diag_vec):
         raise ValueError("A must be a csr or csc matrix")
 
 
+def inplace_csr_matmul_diag(A: csr_matrix | csc_matrix, diag_vec: NDArray) -> None:
+    """Inplace multiply a sparse matrix A with a diag matrix D (A = A @ D).
+    Scales the columns of A by diag_vec.
+    """
+    assert isinstance(diag_vec, np.ndarray)
+    diag_vec = diag_vec.squeeze()
+    assert diag_vec.ndim == 1
+    assert A.shape[1] == diag_vec.size, "Invalid array size: diag_vec must match column count."
 
-def inplace_diag_matmul_csr(A:csr_matrix | csc_matrix, diag_vec: NDArray)->None:
+    if isspmatrix_csr(A):
+        A.data *= diag_vec[A.indices]
+    elif isspmatrix_csc(A):
+        A.data *= np.repeat(diag_vec, np.diff(A.indptr))
+    else:
+        raise ValueError("A must be a csr or csc matrix")
+
+
+def _inplace_diag_matmul_csr(A: csr_matrix | csc_matrix, diag_vec: NDArray) -> None:
     """Inplace multiply a diag matrix D with a csr matrix A:
     
     A = D @ A
@@ -651,12 +674,19 @@ def inplace_diag_matmul_csr(A:csr_matrix | csc_matrix, diag_vec: NDArray)->None:
     i.e. row i of A is scaled by diag_vec[i]
         
     """
+    warnings.warn(
+        "inplace_diag_matmul_csr is deprecated and will be removed. "
+        "Use inplace_diag_matmul_csr_new instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     assert isinstance(diag_vec, np.ndarray)
 
     diag_vec = diag_vec.squeeze()
 
     assert diag_vec.shape[0] == diag_vec.size
 
+    # TODO: Should this not be shape[0]?
     assert A.shape[1] == diag_vec.size, "Invalid array size"
 
 
@@ -668,6 +698,22 @@ def inplace_diag_matmul_csr(A:csr_matrix | csc_matrix, diag_vec: NDArray)->None:
         csr_scale_columns(A.shape[0], A.shape[1], A.indptr,
                           A.indices, A.data, diag_vec)
 
+    else:
+        raise ValueError("A must be a csr or csc matrix")
+
+def inplace_diag_matmul_csr(A: csr_matrix | csc_matrix, diag_vec: NDArray) -> None:
+    """Inplace multiply a diag matrix D with a sparse matrix A (A = D @ A).
+    Scales the rows of A by diag_vec.
+    """
+    assert isinstance(diag_vec, np.ndarray)
+    diag_vec = diag_vec.squeeze()
+    assert diag_vec.ndim == 1
+    assert A.shape[0] == diag_vec.size, "Invalid array size: diag_vec must match row count."
+
+    if isspmatrix_csr(A):
+        A.data *= np.repeat(diag_vec, np.diff(A.indptr))
+    elif isspmatrix_csc(A):
+        A.data *= diag_vec[A.indices]
     else:
         raise ValueError("A must be a csr or csc matrix")
 
@@ -690,6 +736,8 @@ class SparseAutocovMat:
                  PT_symmetric:bool=False):
 
         assert isspmatrix_csr(PT)
+        N = PT.shape[0]
+
         if isinstance(p1, np.ndarray) and isinstance(p2, np.ndarray):
             assert not isinstance(p1, np.matrix)
             assert not isinstance(p2, np.matrix)
@@ -697,21 +745,29 @@ class SparseAutocovMat:
             assert len(p1.shape) == 1
             assert PT.shape[0] == PT.shape[1] == p1.size == p2.size,\
                 f"PT.shape[0]={PT.shape[0]}, PT.shape[1]={PT.shape[1]}, p1.size={p1.size}, p2.size={p2.size}"
+
+            # Array Normalization Check
+            assert np.isclose(p1.sum(), 1.0, atol=1e-5), f"Array p1 is not normalized (sum = {p1.sum()})"
+            assert np.isclose(p2.sum(), 1.0, atol=1e-5), f"Array p2 is not normalized (sum = {p2.sum()})"
+
             self.p_scalars = False
-        elif isinstance(p1, (float,int)) and isinstance(p2, (float,int)):
+
+        elif isinstance(p1, (float, int, np.number)) and isinstance(p2, (float, int, np.number)):
+            # Scalar Normalization Check (Mass = scalar * N)
+            assert np.isclose(p1 * N, 1.0, atol=1e-5), f"Scalar p1={p1} is not normalized for N={N}. Expected {1.0/N}"
+            assert np.isclose(p2 * N, 1.0, atol=1e-5), f"Scalar p2={p2} is not normalized for N={N}. Expected {1.0/N}"
+
             self.p_scalars = True
             self.p1p2 = p1*p2
         else:
-            TypeError("p1 and p2 must be two 1D arrays or two scalar")
-
+            raise TypeError("p1 and p2 must be two 1D arrays or two scalars")
 
         self.PT = PT
         self.p1 = p1
         self.p2 = p2
-        self.size = PT.shape[0]
+        self.size = N
         self.PT_symmetric = PT_symmetric
-
-        self.shape = (self.size,self.size)
+        self.shape = (N, N)
 
         self.PT.sort_indices()
 
@@ -753,19 +809,22 @@ class SparseAutocovMat:
         assert isspmatrix_csr(T)
         assert T.shape[0] == T.shape[1]
 
+        N = T.shape[0]
+
         if p1 is not None:
-            assert isinstance(p1,np.ndarray)
-            assert not isinstance(p1,np.matrix)
+            assert isinstance(p1, np.ndarray)
+            assert not isinstance(p1, np.matrix)
             assert len(p1.shape) == 1
-            assert T.shape[0] == p1.size
+            assert N == p1.size
         else:
-            p1 = np.ones(T.shape[0])/T.shape[0]
+            p1_val = 1.0 / N
+            p1 = np.full(N, p1_val, dtype=np.float64)
 
         if p2 is not None:
             assert isinstance(p2,np.ndarray)
             assert not isinstance(p2,np.matrix)
             assert len(p2.shape) == 1
-            assert T.shape[0] == p2.size
+            assert N == p2.size
         else:
             p2 = p1 @ T
 
@@ -800,27 +859,30 @@ class SparseAutocovMat:
         assert isspmatrix_csr(T)
         assert T.shape[0] == T.shape[1]
 
+        N = T.shape[0]
+
         if p1 is not None:
-            assert isinstance(p1,np.ndarray)
-            assert not isinstance(p1,np.matrix)
+            assert isinstance(p1, np.ndarray)
+            assert not isinstance(p1, np.matrix)
             assert len(p1.shape) == 1
-            assert T.shape[0] == p1.size
+            assert N == p1.size
             p1_scalar = False
         else:
-            p1 = np.ones(T.shape[0])/T.shape[0]
+            p1_val = 1.0 / N
+            p1 = np.full(N, p1_val, dtype=np.float64)
             p1_scalar = True
 
         if p2 is not None:
-            assert isinstance(p2,np.ndarray)
-            assert not isinstance(p2,np.matrix)
+            assert isinstance(p2, np.ndarray)
+            assert not isinstance(p2, np.matrix)
             assert len(p2.shape) == 1
-            assert T.shape[0] == p2.size
+            assert N == p2.size
         else:
             p2 = p1 @ T
 
         p2m1 = p2.copy()
         p2m1[p2m1==0] = 1 # to avoid product of 0 * inf, which gives nan
-        p2m1 = 1/p2m1
+        p2m1 = 1.0 / p2m1
 
         PT = T.copy()
         # T @ diag(1/p2)
@@ -975,16 +1037,16 @@ class SparseAutocovMat:
         # choose the fastest version
         if new_size**2 < self.PT.data.size:
             PTdata, PTrows, PTcols, new_size = _css.aggregate_csr_mat(self.PT.data,
-                                                                    self.PT.indices,
-                                                                    self.PT.indptr,
-                                                                    idxs_array,
-                                                                    idxptr)
+                                                                      self.PT.indices,
+                                                                      self.PT.indptr,
+                                                                      idxs_array,
+                                                                      idxptr)
         else:
             PTdata, PTrows, PTcols, new_size = _css.aggregate_csr_mat_2(self.PT.data,
-                                                                    self.PT.indices,
-                                                                    self.PT.indptr,
-                                                                    idxs_array,
-                                                                    idxptr)
+                                                                        self.PT.indices,
+                                                                        self.PT.indptr,
+                                                                        idxs_array,
+                                                                        idxptr)
 
         newPT = coo_matrix((PTdata,(PTrows,PTcols)), shape=(new_size,new_size))
 
