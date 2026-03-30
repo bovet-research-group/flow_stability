@@ -51,12 +51,11 @@ from copy import copy
 
 import numpy as np
 
+from tempnet import ContTempNetwork
+
 from .logger import get_logger
 from .helpers import include_doc_from, inverted_iterator
 from .state_tracking import StateMeta, OrderedEnum
-from .temporal_network import (
-    ContTempNetwork,
-)
 from .network_clustering import (
     FlowIntegralClustering,
 )

@@ -53,13 +53,13 @@ import pandas as pd
 import psutil
 from scipy.sparse import csr_matrix, eye, triu
 
-from ..sparse_stoch_mat import (
+from stochmat import (
     inplace_csr_matmul_diag,
     inplace_csr_row_normalize,
     sparse_gram_matrix,
     sparse_matmul,
 )
-from ..temporal_network import ContTempNetwork, set_to_zeroes
+from tempnet import ContTempNetwork, set_to_zeroes
 
 # raise Exception
 

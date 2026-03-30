@@ -25,7 +25,7 @@ from scipy.optimize import linear_sum_assignment
 
 from .logger import get_logger
 
-from .sparse_stoch_mat import (
+from stochmat import (
     USE_SPARSE_DOT_MKL,
     inplace_csr_matmul_diag,
     inplace_csr_row_normalize,
@@ -35,11 +35,11 @@ from .sparse_stoch_mat import (
     SparseAutocovMat,
     SparseStochMat
 )
-
-from .temporal_network import (
+from tempnet import (
     set_to_zeroes,
     sparse_lapl_expm,
 )
+
 
 # TODO: use same logic as in 'sparse_stoch_mat'
 USE_CYTHON = True
