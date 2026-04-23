@@ -1,12 +1,3 @@
-[build-system]
-requires = [
-  "scikit-build-core>=0.12.0",
-  "setuptools_scm>=8",
-  "cython",
-  "numpy"
-]
-build-backend = "scikit_build_core.build"
-
 [project]
 name = "flowstab"
 description = "Framework for dynamic community detection in temporal networks."
@@ -19,12 +10,13 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "cython>=3.2.4",
     "hickle>=5.0.3",
     "numpy>=2.2.6",
     "pandas>=2.3.3",
     "psutil>=7.2.2",
     "scipy>=1.15.3",
+    "stochmat @ git+https://github.com/bovet-research-group/stochmat.git@1.0.0-rc1",
+    "tempnet @ git+https://github.com/bovet-research-group/temporal-networks.git@1.0.0-rc1",
 ]
 dynamic = ["version"]
 
@@ -61,32 +53,25 @@ run_laplacians_transmats = "flowstab.scripts.run_laplacians_transmats:main"
 Homepage = "https://github.com/alexbovet/flow_stability"
 Repository = "https://github.com/alexbovet/flow_stability.git"
 
-[tool.scikit-build]
-metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+# Specify the packages to install
+[tool.hatch.build.targets.wheel]
+packages = ["src/flowstab"]
 
-# 2. Expand sdist inclusions to ensure reproducible compilation from source
-sdist.include = [
-  "CMakeLists.txt",
-  "src/flowstab/*.pyx",
-  "src/flowstab/*.pxd"
-]
-wheel.packages = ["src/flowstab"]
+# Use git tags as version for the package
+[tool.hatch.version]
+source = "vcs"
 
-# 3. Explicitly exclude generated C/C++ artifacts from the final wheel
-wheel.exclude = [
-  "src/flowstab/*.c",
-  "src/flowstab/*.cxx",
-  "src/flowstab/*.cpp"
-]
+# (Optional to set the version also Python-style)
+[tool.hatch.build.hooks.vcs]
+version-file = "src/flowstab/_version.py"
 
-[tool.setuptools_scm]
-# Configuration for dynamic version extraction from source control
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.coverage.run]
 relative_files = true
 source = ["src"]
 omit = [
-  "**/_cython_subst.py",
   "tests",
   "*__init__.py",
 ]
@@ -94,9 +79,7 @@ omit = [
 [tool.coverage.paths]
 source = [
     "src/flowstab",
-    "**/site-packages/flowstab"
 ]
-
 
 # This is for the linting with ruff
 [tool.ruff]
@@ -110,3 +93,10 @@ ignore = ["T201"]
 # we want to accept import violations in special contexts
 "__init__.py" = ["E402"]
 "**/{tests,docs,tools}/*" = ["E402"]
+
+[build-system]
+requires = [
+  "hatchling",
+  "hatch-vcs",
+]
+build-backend = "hatchling.build"

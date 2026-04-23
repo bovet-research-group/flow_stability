@@ -41,10 +41,11 @@ from tempnet import (
 )
 
 
-# TODO: use same logic as in 'sparse_stoch_mat'
+# TODO: We should reolve this to install time: If stochmat can be installed we
+#       use it, no testing on runtime needed
 USE_CYTHON = True
 if importlib.util.find_spec("cython") is not None:
-    from ._cython_fast_funcs import (
+    from stochmat.fast import (
         compute_S,
         cython_nmi,
         cython_nvi,
