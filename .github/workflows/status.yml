@@ -72,7 +72,7 @@ jobs:
       - name: Tests
         run: |
           source .venv/bin/activate
-          uv run pytest --junitxml=junit/test-results.xml --cov=tempnet --durations=0
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0
         env:
           COVERAGE_FILE: ".coverage"
 
