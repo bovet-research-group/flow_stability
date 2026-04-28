@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - split
 
 jobs:
   determine-python-version:
