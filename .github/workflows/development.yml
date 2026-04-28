@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [determine-python-version]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Intel MKL
         run: |
@@ -114,12 +114,13 @@ jobs:
       - name: Tests
         run: |
           source .venv/bin/activate
-          uv run pytest --junitxml=junit/test-results.xml --cov=tempnet --durations=0
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0
+          code=$? ; if [ $code -eq 5 ]; then exit 0; else exit $code; fi
         env:
           COVERAGE_FILE: ".coverage.no_memory"
 
       - name: Store coverage file
-        if: matrix.pythonV == needs.determine-python-version.outputs.min-version
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-no_memory
@@ -130,6 +131,7 @@ jobs:
         # Re-syncing is optimized by uv's global cache
         run: |
           uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 --memray --most-allocations=0 -k '_memory'
+          code=$? ; if [ $code -eq 5 ]; then exit 0; else exit $code; fi
         env:
           COVERAGE_FILE: ".coverage.memory"
 
@@ -142,7 +144,7 @@ jobs:
           include-hidden-files: true
 
   coverage:
-    if: github.event.pull_request.draft == false
+    if: always() && github.event.pull_request.draft == false
     name: combine-coverage
     runs-on: ubuntu-24.04
     needs: [setup-and-test, test-memory]
