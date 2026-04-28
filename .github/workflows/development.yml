@@ -29,6 +29,7 @@ jobs:
           fi
           echo "version=$py_min" >> "$GITHUB_OUTPUT"
           echo "Resolved minimum Python: $py_min"
+
   setup-and-test:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
@@ -111,31 +112,13 @@ jobs:
           source .venv/bin/activate
           uv pip install -e . --group dev
 
-      - name: Tests
+      - name: Tests memory tracking
         run: |
-          source .venv/bin/activate
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0
-          code=$? ; if [ $code -eq 5 ]; then exit 0; else exit $code; fi
-        env:
-          COVERAGE_FILE: ".coverage.no_memory"
-
-      - name: Store coverage file
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-no_memory
-          path: .coverage.no_memory
-          include-hidden-files: true
-
-      - name: Tests with memory tracking
-        # Re-syncing is optimized by uv's global cache
-        run: |
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 --memray --most-allocations=0 -k '_memory'
-          code=$? ; if [ $code -eq 5 ]; then exit 0; else exit $code; fi
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k '_memory'
         env:
           COVERAGE_FILE: ".coverage.memory"
 
-      - name: Store memory coverage file
+      - name: Store coverage file
         if: always()
         uses: actions/upload-artifact@v4
         with:
