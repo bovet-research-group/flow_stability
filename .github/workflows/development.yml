@@ -84,7 +84,8 @@ jobs:
           include-hidden-files: true
 
   test-memory:
-    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -125,6 +126,7 @@ jobs:
           include-hidden-files: true
 
   coverage:
+    if: github.event.pull_request.draft == false
     name: combine-coverage
     runs-on: ubuntu-latest
     needs: [setup-and-test, test-memory]
