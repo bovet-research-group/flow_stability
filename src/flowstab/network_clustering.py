@@ -5,7 +5,7 @@ Copyright (C) 2021 Alexandre Bovet <alexandre.bovet@maths.ox.ac.uk>
 
 """
 from __future__ import annotations
-from typing import Collection, Any
+from typing import Sequence
 
 import os
 import time
@@ -35,26 +35,18 @@ from stochmat import (
     SparseAutocovMat,
     SparseStochMat
 )
+from stochmat.fast import (
+    compute_S,
+    nmi,
+    nvi,
+    sum_Sout,
+    sum_Sto
+)
+
 from tempnet import (
     set_to_zeroes,
     sparse_lapl_expm,
 )
-
-
-# TODO: We should reolve this to install time: If stochmat can be installed we
-#       use it, no testing on runtime needed
-USE_CYTHON = True
-if importlib.util.find_spec("cython") is not None:
-    from stochmat.fast import (
-        compute_S,
-        cython_nmi,
-        cython_nvi,
-        sum_Sout,
-        sum_Sto
-    )
-else:
-    print("Could not load cython functions")
-    USE_CYTHON = False
 
 # get the logger
 logger = get_logger()
@@ -70,7 +62,7 @@ class Partition:
 
     def __init__(self,
                  num_nodes:int,
-                 cluster_list:Collection|None=None,
+                 cluster_list: Sequence[set[int]] | None = None,
                  node_to_cluster_dict:dict|None=None,
                  check_integrity:bool=False):
         """
@@ -425,10 +417,6 @@ class BaseClustering:
             self._in_neighs.append(np.nonzero(self.T[:,node] > 0)[0].tolist())
             self._neighs.append(list(set(self._out_neighs[node] + self._in_neighs[node])))
 
-
-
-
-
     def _compute_S(self, S_threshold=None):
         """
         Compute the internal matrix comparing probabilities for each node.
@@ -444,16 +432,13 @@ class BaseClustering:
         -------
         S : numpy.ndarray
             The internal matrix comparing probabilities for each node.
-                
+
         Saves the matrix in `self._S`.
         """
-        if USE_CYTHON:
-            S = compute_S(self.p1,self.p2,self.T)
-        else:
-            S = np.diag(self.p1) @ self.T - np.outer(self.p1,self.p2)
+        S = compute_S(self.p1, self.p2, self.T)
 
         if S_threshold is not None:
-            S[np.where(np.abs(S)<S_threshold)] = 0
+            S[np.where(np.abs(S) < S_threshold)] = 0
 
         return S
 
@@ -1052,88 +1037,94 @@ class BaseClustering:
 class Clustering(BaseClustering):
     """Symmetric Clustering.
 
-    Finds the best partition that optimizes the stability between two times 
+    Finds the best partition that optimizes the stability between two times
     defined as the trace of the clustered autocovariance matrix.
-        
+
     At least `T` must be given to initialize the clustering.
-    
-    Clusters can either be initilized with a cluster_list or a node_to_cluster_dict.
+
+    Clusters can either be initilized with a cluster_list or a
+    node_to_cluster_dict.
     """
 
-    def __init__(self, p1=None, p2=None,T=None, S=None,
-                       cluster_list=None,
-                       node_to_cluster_dict=None,
-                       rnd_state=None, rnd_seed=None,
-                       S_threshold=None):
+    def __init__(self,
+                 p1=None,
+                 p2=None,
+                 T=None,
+                 S=None,
+                 cluster_list=None,
+                 node_to_cluster_dict=None,
+                 rnd_state=None, rnd_seed=None,
+                 S_threshold=None):
         """
 
         Parameters
-        ---------- 
+        ----------
         T: numpy.ndarrays
-            NxN transition matrix, T[i,j] is the probability of going from node i to
-            node j between t1 and t2.
-            
+            NxN transition matrix, T[i,j] is the probability of going from
+            node i to node j between t1 and t2.
+
         p1: numpy.ndarrays
             Nx1 probability density at t1. Default is the uniform probability.
-            
+
         p2: numpy.ndarrays
             Nx1 probability density at t2. Default is p1 @ T.
-            
+
         S: numpy.ndarrays
             NxN covariance matrix. Default is diag(p1) @ T - outer(p1,p2).
-            
+
         cluster_list: list
             list of set of nodes describing the partition. Default is singleton
             clusters.
-            
+
         node_to_cluster_dict: dict
-            dictionary with mapping between nodes and cluster number. Default is singleton
-            clusters.
-            
+            dictionary with mapping between nodes and cluster number.
+            Default is singleton clusters.
+
         rnd_state: np.random.RandomState
             Random state object. Default creates a new one.
-            
+
         rnd_seed: int
             Seed for the random object. Default is a random seed.
-        
+
         S_threshold: float
             Smallest values of S. Used to trim insignificantly small values.
 
         """
 
-        super().__init__(p1=p1, p2=p2,T=T, S=S,
-                       source_cluster_list=cluster_list,
-                       source_node_to_cluster_dict=node_to_cluster_dict,
-                       target_cluster_list=None,
-                       target_node_to_cluster_dict=None,
-                       rnd_state=rnd_state,
-                       rnd_seed=rnd_seed,
-                       S_threshold=S_threshold)
+        super().__init__(p1=p1,
+                         p2=p2,
+                         T=T,
+                         S=S,
+                         source_cluster_list=cluster_list,
+                         source_node_to_cluster_dict=node_to_cluster_dict,
+                         target_cluster_list=None,
+                         target_node_to_cluster_dict=None,
+                         rnd_state=rnd_state,
+                         rnd_seed=rnd_seed,
+                         S_threshold=S_threshold)
 
         # create an alias for source partition since we only need one partition
         self.partition = self.source_part
         self.target_part = None
 
-
     def compute_stability(self, R=None):
         """Returns the stability of the clusters given in `cluster_list`
         computed between times `t1` and `t2`
-            
+
         Here, for symmetric clustering, we only care about the diagonal
         of R.
-            
+
         """
         if R is None:
             R = self._compute_clustered_autocov()
 
         return R.sum()
 
-
     def _compute_clustered_autocov(self, partition=None):
         """Compute the clustered autocovariance matrix based on `partition`.
-            
+
         Default partition is `self.source_part`.
-            
+
         Here, for symmetric clustering, we only care about the diagonal
         of R.
         """
@@ -1146,8 +1137,10 @@ class Clustering(BaseClustering):
         R = np.zeros(num_clusters)
 
         # get indices for correct broadcasting
-        cluster_to_node_list = {ic : np.array(cl) for ic,cl in \
-                            enumerate(partition.iter_cluster_node_index())}
+        cluster_to_node_list = {
+            ic: np.array(cl)
+            for ic,cl in enumerate(partition.iter_cluster_node_index())
+        }
 
         for s in range(num_clusters):
             if len(partition.cluster_list[s]) > 0:
@@ -1156,14 +1149,13 @@ class Clustering(BaseClustering):
 
         return R
 
-    def _compute_delta_stab_moveto(self, k, c_f,
-                                 partition=None):
+    def _compute_delta_stab_moveto(self, k, c_f, partition=None):
         """Return the gain in stability obtained by moving node
         k into community c_f.
-            
+
         If given, the list of original clusters is given by `partition` and
         otherwise is taken from `self.source_part`.
-            
+
         c_f may be an empty cluster
         """
         if partition is None:
@@ -1176,61 +1168,46 @@ class Clustering(BaseClustering):
         ix_cf = list(partition.cluster_list[c_f])
 
         # gain in stability from moving node k to community c_f
-        if USE_CYTHON:
-            delta_r1 = sum_Sto(self._S, k, ix_cf)
-        else:
-            delta_r1 = self._S[k,ix_cf].sum() \
-                        + self._S[ix_cf,k].sum() \
-                        + self._S[k,k]
+        delta_r1 = sum_Sto(self._S, k, ix_cf)
 
         return delta_r1
 
+    def _compute_delta_stab_moveout(self,
+                                    k,
+                                    c_i,
+                                    partition=None):
+        """
+        Return the stability gain form moving node k out of community c_i.
 
-    def _compute_delta_stab_moveout(self, k, c_i,
-                                 partition=None):
-        """Return the gain in stability obtained by moving node
-        k out of community c_i.
-            
         If given, the list of clusters is given by `partition` and
         otherwise is taken from `self.partition`.
-            
+
         c_i is assumed to be non-empty!
-            
         """
         if partition is None:
             partition = self.partition
 
         if k not in partition.cluster_list[c_i]:
             raise ValueError("node k must be in cluster c_i")
-
-
         # indexes of nodes in c_i
         ix_ci = list(partition.cluster_list[c_i])
 
         # gain in stability from moving node k out of community c_i
-        if USE_CYTHON:
-            delta_r2 = sum_Sout(self._S, k, ix_ci)
-        else:
-            delta_r2 = - self._S[k,ix_ci].sum() \
-                       - self._S[ix_ci,k].sum() \
-                       + self._S[k,k]
-                   # we add S[k,k] because it was counted twice in the sums
+        delta_r2 = sum_Sout(self._S, k, ix_ci)
 
         return delta_r2
 
-
     def _louvain_move_nodes(self,
-                           delta_r_threshold=np.finfo(float).eps,
-                           n_sub_iter_max=1000,
-                           verbose=False,
-                           print_num_loops=False):
+                            delta_r_threshold=np.finfo(float).eps,
+                            n_sub_iter_max=1000,
+                            verbose=False,
+                            print_num_loops=False):
         """Return delta_r_tot, n_loop
-        
+
         """
         delta_r_tot = 0
         delta_r_loop = 1
         n_loop = 1
-
 
         while (delta_r_loop > delta_r_threshold) and (n_loop < n_sub_iter_max):
 
@@ -2185,31 +2162,28 @@ def jaccard_distance(clusters1, clusters2):
 
 
 def norm_mutual_information(clusters1, clusters2):
-    """Returns the normalized mutial information between two
-    non-overlapping clustering.
-        
-    The mutual information is normalized by the max of the 
-    two individual entropies.
-        
+    """Normalized mutial information between two non-overlapping clustering.
+
+    The mutual information is normalized by the max of the two individual
+    entropies.
+
     .. math::
         NMI = (H(C1)+H(C2)-H(C1,C2))/max(H(C1),H(C2))
-    
+
     inputs can be node_to_cluster dictionaries, cluster lists of node sets
     or instances of Partition.
     """
     # convert to list of sets
     if isinstance(clusters1, dict):
-        cluster_list = [set() for _ in \
-                        range(max(clusters1.values()) + 1)]
+        cluster_list = [set() for _ in range(max(clusters1.values()) + 1)]
         for node, clust in clusters1.items():
-                cluster_list[clust].add(node)
+            cluster_list[clust].add(node)
         clusters1 = cluster_list
 
     if isinstance(clusters2, dict):
-        cluster_list = [set() for _ in \
-                        range(max(clusters2.values()) + 1)]
+        cluster_list = [set() for _ in range(max(clusters2.values()) + 1)]
         for node, clust in clusters2.items():
-                cluster_list[clust].add(node)
+            cluster_list[clust].add(node)
         clusters2 = cluster_list
 
     if isinstance(clusters1, Partition):
@@ -2231,40 +2205,17 @@ def norm_mutual_information(clusters1, clusters2):
     n1 = len(clusters1)
     n2 = len(clusters2)
 
-    if USE_CYTHON:
-        return cython_nmi(clusters1, clusters2, N, n1, n2)
-    else:
-        # loop over pairs of clusters
-        p1 = np.zeros(n1) # probs to belong to clust1
-        p12 = np.zeros(n1*n2) # probs to belong to clust1 & clust2
-        k = 0
-        for i,clust1 in enumerate(clusters1):
-            p1[i] = len(clust1)/N
-            for j, clust2 in enumerate(clusters2):
-                p12[k] = len(clust1.intersection(clust2))/N
-                k += 1
-
-        p2 = np.array([len(clust2)/N for clust2 in clusters2])
-
-        # Shannon entropies
-        H1 = - np.sum(p1[p1 !=0]*np.log2(p1[p1 !=0]))
-        H2 = - np.sum(p2[p2 !=0]*np.log2(p2[p2 !=0]))
-        H12 = - np.sum(p12[p12 !=0]*np.log2(p12[p12 != 0]))
-
-        # Mutual information
-        MI = H1 + H2 - H12
-
-        return MI/max((H1,H2))
+    return nmi(clusters1, clusters2, N, n1, n2)
 
 
 def norm_var_information(clusters1, clusters2, N=None, use_clust_list=False):
-    r"""Returns the normalized variation of information between two
-    non-overlapping clustering.
-        
+    r"""
+    Normalized variation of information between two non-overlapping clustering.
+
     .. math::
 
         \hat{V}(C_1,C_2) = ({H(C1|C2)+H(C2|C1)})/{log_2 N}
-    
+
     inputs can be node_to_cluster dictionaries, cluster lists of node sets
     or instances of Partition.
     """
@@ -2272,17 +2223,15 @@ def norm_var_information(clusters1, clusters2, N=None, use_clust_list=False):
 
         # convert to list of sets
         if isinstance(clusters1, dict):
-            cluster_list = [set() for _ in \
-                            range(max(clusters1.values()) + 1)]
+            cluster_list = [set() for _ in range(max(clusters1.values()) + 1)]
             for node, clust in clusters1.items():
-                    cluster_list[clust].add(node)
+                cluster_list[clust].add(node)
             clusters1 = cluster_list
 
         if isinstance(clusters2, dict):
-            cluster_list = [set() for _ in \
-                            range(max(clusters2.values()) + 1)]
+            cluster_list = [set() for _ in range(max(clusters2.values()) + 1)]
             for node, clust in clusters2.items():
-                    cluster_list[clust].add(node)
+                cluster_list[clust].add(node)
             clusters2 = cluster_list
 
         if isinstance(clusters1, Partition):
@@ -2290,7 +2239,6 @@ def norm_var_information(clusters1, clusters2, N=None, use_clust_list=False):
 
         if isinstance(clusters2, Partition):
             clusters2 = clusters2.cluster_list
-
 
     if not isinstance(clusters1[0], set):
         # make sure it is a list of sets
@@ -2311,35 +2259,14 @@ def norm_var_information(clusters1, clusters2, N=None, use_clust_list=False):
     if n1 == n2 == N:
         return 0.0
 
-    clusters1 = sorted(clusters1,key=lambda c:min(c))
-    clusters2 = sorted(clusters2,key=lambda c:min(c))
+    clusters1 = sorted(clusters1, key=lambda c: min(c))
+    clusters2 = sorted(clusters2, key=lambda c: min(c))
 
     # other trivial case
     if (n1 == n2) and (clusters1 == clusters2):
         return 0.0
 
-    if USE_CYTHON:
-        return cython_nvi(clusters1, clusters2, N)
-    else:
-        # loop over pairs of clusters
-        VI = 0.0
-        for i in range(n1):
-            clust1 = clusters1[i]
-            ni = len(clust1)
-            n_inter = 0
-            for j in range(n2):
-                clust2 = clusters2[j]
-                nij = len(clust1.intersection(clust2))
-                n_inter += nij
-                if nij > 0:
-                    nj = len(clust2)
-                    VI -= nij*np.log2((nij**2)/(ni * nj))
-
-                if n_inter >= ni:
-                    # we have found all the possible intersections
-                    break
-
-        return VI/(N*np.log2(N))
+    return nvi(clusters1, clusters2, N)
 
 
 def avg_norm_var_information(clusters_lists_list, num_samples=None):
