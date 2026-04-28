@@ -1,10 +1,13 @@
 name: Development Workflow
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - main
+permissions:
+  pull-requests: write
+  contents: write
 
 jobs:
   determine-python-version:
