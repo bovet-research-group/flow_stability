@@ -109,15 +109,29 @@ jobs:
           source .venv/bin/activate
           uv pip install -e . --group dev
 
+      - name: Tests
+        run: |
+          source .venv/bin/activate
+          uv run pytest --junitxml=junit/test-results.xml --cov=tempnet --durations=0
+        env:
+          COVERAGE_FILE: ".coverage.no_memory"
+
+      - name: Store coverage file
+        if: matrix.pythonV == needs.determine-python-version.outputs.min-version
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-no_memory
+          path: .coverage.no_memory
+          include-hidden-files: true
+
       - name: Tests with memory tracking
         # Re-syncing is optimized by uv's global cache
         run: |
-          uv sync --all-extras --all-groups
           uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 --memray --most-allocations=0 -k '_memory'
         env:
           COVERAGE_FILE: ".coverage.memory"
 
-      - name: Store coverage file
+      - name: Store memory coverage file
         if: always()
         uses: actions/upload-artifact@v4
         with:
