@@ -87,6 +87,7 @@ jobs:
   test-memory:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
+    needs: [determine-python-version]
     steps:
       - uses: actions/checkout@v4
 
@@ -143,7 +144,7 @@ jobs:
   coverage:
     if: github.event.pull_request.draft == false
     name: combine-coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [setup-and-test, test-memory]
     permissions:
       pull-requests: write
