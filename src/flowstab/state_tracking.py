@@ -83,6 +83,7 @@ class OrderedEnum(Enum):
     def __str__(self):
         return f"{self.name} ({self.value})"
 
+
 class State:
     """
     State machine for managing analysis workflow progress.
@@ -90,11 +91,12 @@ class State:
     Holds information about the current state, required properties, and
     required methods. Used internally by classes using StateMeta.
     """
+
     def __init__(self,
-                 states:OrderedEnum,
-                 properties_required:dict|None=None,
-                 properties_set:dict|None=None,
-                 methods_required:dict|None=None,
+                 states: OrderedEnum,
+                 properties_required: dict | None = None,
+                 properties_set: dict | None = None,
+                 methods_required: dict | None = None,
                  **kwargs
                  ):
         """
@@ -114,7 +116,7 @@ class State:
             Additional attributes to set.
         """
         self._states = states
-        self.current = min(self._states, key=lambda state: state.value)
+        self.current = min(self._states, key=lambda state: state. value)
         self.properties_required = copy(properties_required)
         self.methods_required = copy(methods_required)
         self.properties_set = copy(properties_set)
@@ -154,7 +156,7 @@ class State:
         _to_set = self.missing_parameters
         _to_run = self._next_method.get(self.current)
         return _to_set, _to_run
-        
+
 
 class StateMeta(type):
     """
