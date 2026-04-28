@@ -73,7 +73,8 @@ jobs:
 
       - name: Tests without memory tracking
         run: |
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k 'not _memory'
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k 'not _memory' \
+            || { code=$?; [ $code -eq 5 ] && exit 0 || exit $code; }
         env:
           COVERAGE_FILE: ".coverage.no_memory"
 
@@ -114,7 +115,8 @@ jobs:
 
       - name: Tests memory tracking
         run: |
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k '_memory'
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k '_memory' \
+            || { code=$?; [ $code -eq 5 ] && exit 0 || exit $code; }
         env:
           COVERAGE_FILE: ".coverage.memory"
 
