@@ -7,7 +7,7 @@ Sci. Adv., 8 (19), eabj3063. DOI: 10.1126/sciadv.abj3063
 
 <!--- quickstart --->
 ## Requirements
-- Python3 (>=3.9)
+- **Python** - Supported versions: [![Python 3.14](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/j-i-l/809edea020e4ae8a8ffb82e5cfc2e69f/raw/flowstab-python-3.14.json)](https://github.com/bovet-research-group/stochmat/actions/workflows/status.yml) [![Python 3.13](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/j-i-l/809edea020e4ae8a8ffb82e5cfc2e69f/raw/flowstab-python-3.13.json)](https://github.com/bovet-research-group/stochmat/actions/workflows/status.yml) [![Python 3.12](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/j-i-l/809edea020e4ae8a8ffb82e5cfc2e69f/raw/flowstab-python-3.12.json)](https://github.com/bovet-research-group/stochmat/actions/workflows/status.yml) [![Python 3.11](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/j-i-l/809edea020e4ae8a8ffb82e5cfc2e69f/raw/flowstab-python-3.11.json)](https://github.com/bovet-research-group/stochmat/actions/workflows/status.yml) [![Python 3.10](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/j-i-l/809edea020e4ae8a8ffb82e5cfc2e69f/raw/flowstab-python-3.10.json)](https://github.com/bovet-research-group/stochmat/actions/workflows/status.yml)
 - pandas
 - scipy
 - numpy
