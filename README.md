@@ -11,8 +11,7 @@ Sci. Adv., 8 (19), eabj3063. DOI: 10.1126/sciadv.abj3063
 - pandas
 - scipy
 - numpy
-- Cython (optional but highly recommended)
-- [sparse_dot_mkl](https://github.com/flatironinstitute/sparse_dot) (optional, allows to perform multithreaded sparse matrix multiplication)
+- MKL support (optional): see [MKL acceleration](#optional-mkl-acceleration) below
 
 ## Installation
 
@@ -20,6 +19,37 @@ You can pip install `flowstab` directly from this repository into your virtual
 environment. Simply run:
 
     pip install git+https://github.com/alexbovet/flow_stability.git
+
+### Optional: MKL acceleration
+
+For optimal performance with large sparse matrices, install Intel MKL first:
+
+**Ubuntu/Debian:**
+
+    sudo apt-get update
+    sudo apt-get install intel-mkl
+
+**macOS (via Homebrew):**
+
+    brew install intel-mkl
+
+Then install `flowstab` with the `[mkl]` extra:
+
+    pip install "flowstab[mkl] @ git+https://github.com/bovet-research-group/flow_stability.git"
+
+> **`flowstab[mkl]` is a hard runtime dependency.** It pulls `stochmat[mkl]`, which
+> requires Intel MKL shared libraries to be loadable at runtime. `import flowstab`
+> will raise `ImportError` if `sparse_dot_mkl` is installed but MKL libs are missing.
+> If you do not need MKL, install plain `flowstab` and SciPy will be used as a
+> transparent fallback.
+
+To verify the MKL backend is active after installation:
+
+```python
+import stochmat
+print(stochmat.backends.summary())
+# {'cython_sparse_stoch': True, 'fast': True, 'mkl': True}
+```
 
 ## Usage
 
@@ -99,10 +129,7 @@ python shell:
 
 **run\_clusterings**
 
-This command requires
-[sparse\_dot\_mkl](https://github.com/flatironinstitute/sparse_dot) which relies
-on the closed-source `libmkl_rt.so` library. In Ubuntu, you might need to fetch
-this library with `apt-get install libmkl-rt`.
+This command requires MKL support. See [Optional: MKL acceleration](#optional-mkl-acceleration) for installation instructions.
 
 **run\_cov\_integrals**
 
