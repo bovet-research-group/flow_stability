@@ -46,10 +46,10 @@ fs.state.howto['set_temporal_network']
 #             Arguments to initialize a ContTempNetwork instance.
 #         ...
 fs.set_temporal_network(events_table="my_contacts.csv")
-fs_mice.state.next
+fs.state.next
 # Out[6]: ([], 'compute_laplacian_matrices')
 fs.compute_laplacian_matrices()
-fs_mice.state.next
+fs.state.next
 # Out[8]: (['time_scale'], 'compute_inter_transition_matrices')
 # So we need to set `time_scale` next, but how?
 print(fs_mice.state.howto['time_scale'])
@@ -68,23 +68,23 @@ print(fs_mice.state.howto['time_scale'])
 # 
 # ...
 fs.set_time_scale(10)
-fs_mice.state.next
+fs.state.next
 # Out[11]: ([], 'compute_inter_transition_matrices')
 fs.compute_inter_transition_matrices()
 fs.time_direction = 0  # perform both forward and backard
 fs.set_flow_clustering()
 fs.find_louvain_clustering()
-fs.flow_clusetering_backward
+fs.flow_clustering_backward
 # Out[17]: {10: <flowstab.network_clustering.FlowIntegralClustering at 0x7fef57a7fd00>}
 ```
 
-Alternatively, you can use individual elements form the `flowstab` packacke directly.
-For exaple if you want to use the `FlowIntegralClustering` class, for example, you would
+Alternatively, you can use individual elements from the `flowstab` package directly.
+For example, if you want to use the `FlowIntegralClustering` class, you would
 want to add the following line in your script:
 
 ```python
 
-from flowstab.netowrk_clustering import FlowIntegralClustering
+from flowstab.network_clustering import FlowIntegralClustering
 
 # forw_flow = FlowIntegralClustering(...
 ```
@@ -93,15 +93,15 @@ Refer to the [examples](./examples/) folder more detailed usage examples.
 
 ### CLI scripts
 
-`flowstab` provides also several command line hooks that can be run
-directly in the terminal after installation without the need of opening a
+`flowstab` also provides several command line hooks that can be run
+directly in the terminal after installation, without the need to open a
 python shell:
 
 **run\_clusterings**
 
 This command requires
 [sparse\_dot\_mkl](https://github.com/flatironinstitute/sparse_dot) which relies
-on the closed-source `libmkl_rt.so` library. In Ubuntu you might need to fetch
+on the closed-source `libmkl_rt.so` library. In Ubuntu, you might need to fetch
 this library with `apt-get install libmkl-rt`.
 
 **run\_cov\_integrals**
@@ -116,7 +116,7 @@ The main classes are:
 
 Additional interesting classes and functions are:
 - `Clustering` and `SparseClustering` in the `network_clustering` sub-module can be used to directly cluster covariances or integrals of covariances.
-- `static_clustering` in `network_clustering` is an helper function to cluster static networks using Markov Stability.
+- `static_clustering` in `network_clustering` is a helper function to cluster static networks using Markov Stability.
 - `run_multi_louvain` in `network_clustering` helper function to run the Louvain multiple times on the same covariance in order to check the robustness of the partition.
 - `avg_norm_var_information` in `network_clustering` computes the average Normalized Variation of Information of list of cluster lists obtained with `run_multi_louvain`.
 - `compute_parallel_clustering` in `parallel_clustering`, same than `run_multi_louvain` but in parallel.
