@@ -15,8 +15,8 @@ dependencies = [
     "pandas>=2.3.3",
     "psutil>=7.2.2",
     "scipy>=1.15.3",
-    "stochmat @ git+https://github.com/bovet-research-group/stochmat.git@1.0.0-rc2",
-    "tempnet @ git+https://github.com/bovet-research-group/temporal-networks.git@1.0.0-rc1",
+    "stochmat @ git+https://github.com/bovet-research-group/stochmat.git",  # add `@1.0.0-rc4` to pin to a version
+    "tempnet @ git+https://github.com/bovet-research-group/temporal-networks.git",
 ]
 dynamic = ["version"]
 
