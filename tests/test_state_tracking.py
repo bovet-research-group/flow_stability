@@ -4,6 +4,7 @@ from functools import total_ordering
 
 from flowstab.state_tracking import StateMeta
 
+
 @total_ordering
 class MyStates(Enum):
     INIT = 0
@@ -22,7 +23,9 @@ class MyStates(Enum):
     def __str__(self):
         return f"{self.name} ({self.value})"
 
+
 register = StateMeta.register  # make register method available as decorator
+
 
 class MyClass(metaclass=StateMeta, states=MyStates):
     def __init__(self):
@@ -42,14 +45,17 @@ class MyClass(metaclass=StateMeta, states=MyStates):
         """Run some process after value is set"""
         self._ran = True
 
+
 @pytest.fixture(scope='function')
 def obj():
     return MyClass()
+
 
 def test_initial_state(obj):
     assert obj.state.current == MyStates.INIT
     assert not obj.state.properties_set['value']
     assert 'value' in obj.state.properties_required[MyStates.PROP_SET]
+
 
 def test_set_property_and_state(obj):
     """Setting a property sets to the next_state if current is more advanced
@@ -60,6 +66,7 @@ def test_set_property_and_state(obj):
     obj.value = 10
     assert obj.state.current == MyStates.PROP_SET
     assert obj.state.properties_set['value']
+
 
 def test_missing_property_blocks_method(obj):
     # run() requires value to be set
@@ -77,17 +84,19 @@ def test_missing_property_blocks_method(obj):
     obj.run()
     assert obj.state.current == MyStates.METHOD_RUN
 
+
 def test_method_advances_state(obj):
     obj.value = 10
     obj.state.current = MyStates.PROP_SET
     obj.run()
     assert obj.state.current == MyStates.METHOD_RUN
 
+
 def test_missing_properties(obj):
     # At INIT, value is required for PROP_SET
-    assert obj.state.missing == []
+    assert obj.state.missing_parameters == []
     obj.state.current = MyStates.PROP_SET
-    assert obj.state.missing == ['value']
+    assert obj.state.missing_parameters == ['value']
 
 def test_next_property_and_method(obj):
     assert obj.state.next == ([], None)

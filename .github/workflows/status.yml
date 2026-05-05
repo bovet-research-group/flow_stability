@@ -1,0 +1,140 @@
+name: Status
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  determine-python-version:
+    runs-on: ubuntu-24.04
+    outputs:
+      min-version: ${{ steps.pyver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Determine minimum Python version from pyproject.toml
+        id: pyver
+        run: |
+          py_req=$(sed -n 's/^[[:space:]]*requires-python[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' pyproject.toml | head -n1)
+          py_min=$(echo "$py_req" | sed -n 's/.*>=[[:space:]]*\([0-9]\+\.[0-9]\+\).*/\1/p')
+          if [ -z "$py_min" ]; then
+            echo "Could not parse minimum Python version from requires-python='$py_req'" >&2
+            exit 1
+          fi
+          echo "version=$py_min" >> "$GITHUB_OUTPUT"
+          echo "Resolved minimum Python: $py_min"
+
+  unit-tests:
+    runs-on: ubuntu-24.04
+    needs: [determine-python-version]
+    strategy:
+      matrix:
+        pythonV: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: 'true'
+          submodules: recursive
+
+      - name: Install Intel MKL
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install intel-mkl
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.pythonV }}
+
+      - name: Install project and dev dependencies
+        # Using `uv venv` + `uv pip install -e .` instead of `uv sync`:
+        # `uv sync`'s ephemeral build env mis-resolves Python.h for git-URL
+        # deps (e.g. stochmat). `uv pip install -e .` builds against the
+        # active venv directly and works.
+        run: |
+          uv venv --python ${{ matrix.pythonV }} .venv
+          source .venv/bin/activate
+          uv pip install -e . --group dev
+
+      - name: Lint with ruff
+        run: |
+          source .venv/bin/activate
+          uv run ruff check --select=ALL --output-format=github src/
+        continue-on-error: true
+
+      - name: Tests
+        run: |
+          source .venv/bin/activate
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0
+        env:
+          COVERAGE_FILE: ".coverage"
+
+      - name: Store coverage file
+        if: matrix.pythonV == needs.determine-python-version.outputs.min-version
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: .coverage
+          include-hidden-files: true
+
+      # Update per-version pass/fail badge in gist
+      - name: Resolve and verify installed package name
+        if: always()
+        id: pkg
+        run: |
+          # Read [project].name from pyproject.toml via stdlib tomllib (PEP 621).
+          # Use the runner's system python3 (Ubuntu 24.04 ships >=3.12) so this
+          # is independent of the matrix Python version (which may be 3.10,
+          # without stdlib tomllib).
+          pkg_name=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+          if [ -z "$pkg_name" ]; then
+            echo "Could not read [project].name from pyproject.toml" >&2
+            exit 1
+          fi
+          # Verify the package is actually installed in the venv.
+          source .venv/bin/activate
+          if ! uv pip show "$pkg_name" >/dev/null 2>&1; then
+            echo "Package '$pkg_name' is not installed in the venv" >&2
+            exit 1
+          fi
+          echo "name=$pkg_name" >> "$GITHUB_OUTPUT"
+          echo "Resolved and verified package name: $pkg_name"
+
+      - name: Update Python ${{ matrix.pythonV }} status badge
+        if: always()
+        # pinned to v1.8.0
+        uses: schneegans/dynamic-badges-action@0e50b8bad39e7e1afd3e4e9c2b7dd145fad07501
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: ${{ vars.STATUS_GIST_ID }}
+          filename: ${{ steps.pkg.outputs.name }}-python-${{ matrix.pythonV }}.json
+          label: "Python ${{ matrix.pythonV }}"
+          message: ${{ job.status == 'success' && 'passing' || 'failing' }}
+          color: ${{ job.status == 'success' && 'brightgreen' || 'red' }}
+
+  coverage-badge:
+    name: coverage-badge
+    runs-on: ubuntu-24.04
+    needs: [unit-tests]
+    if: always()
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          pattern: coverage*
+          merge-multiple: true
+
+      - name: Update coverage badge
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_COVERAGE_FILES: true

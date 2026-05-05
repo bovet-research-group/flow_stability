@@ -106,6 +106,13 @@ License
 GNU Lesser General Public License v3 or later (LGPLv3+).
 
 """
+try:
+    # try to import version (provided by hatch (see pyproject.toml)
+    from ._version import __version__
+except ImportError:
+    # Fallback if the package wasn't installed properly
+    __version__ = "unknown"
+
 import logging
 
 from .flow_stability import FlowStability

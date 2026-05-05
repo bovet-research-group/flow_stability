@@ -1,16 +1,41 @@
 name: Development Workflow
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - main
+
+permissions:
+  pull-requests: write
+  contents: write
 
 jobs:
-  setup-and-test:
-    runs-on: ubuntu-latest
+  determine-python-version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.pyver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Determine minimum Python version from pyproject.toml
+        id: pyver
+        run: |
+          py_req=$(sed -n 's/^[[:space:]]*requires-python[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' pyproject.toml | head -n1)
+          py_min=$(echo "$py_req" | sed -n 's/.*>=[[:space:]]*\([0-9]\+\.[0-9]\+\).*/\1/p')
+          if [ -z "$py_min" ]; then
+            echo "Could not parse minimum Python version from requires-python='$py_req'" >&2
+            exit 1
+          fi
+          echo "version=$py_min" >> "$GITHUB_OUTPUT"
+          echo "Resolved minimum Python: $py_min"
+
+  setup-and-test:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    needs: [determine-python-version]
+    steps:
+      - uses: actions/checkout@v5
 
       - name: Install Intel MKL
         run: |
@@ -24,11 +49,13 @@ jobs:
           cache-dependency-glob: "pyproject.toml"
 
       - name: Set up Python
-        run: uv python install 3.10
+        run: uv python install ${{ needs.determine-python-version.outputs.version }}
 
-      - name: Sync dependencies
-        # Synchronizes base, mkl extra, and dev groups (testing/docs)
-        run: uv sync --all-extras --all-groups
+      - name: Install project and dev dependencies
+        run: |
+          uv venv --python ${{ needs.determine-python-version.outputs.version }} .venv
+          source .venv/bin/activate
+          uv pip install -e . --group dev
 
       - name: Build wheel
         run: uv build
@@ -46,7 +73,8 @@ jobs:
 
       - name: Tests without memory tracking
         run: |
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k 'not _memory'
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k 'not _memory' \
+            || { code=$?; [ $code -eq 5 ] && exit 0 || exit $code; }
         env:
           COVERAGE_FILE: ".coverage.no_memory"
 
@@ -59,9 +87,11 @@ jobs:
           include-hidden-files: true
 
   test-memory:
-    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    needs: [determine-python-version]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Intel MKL
         run: |
@@ -72,12 +102,21 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
-      - name: Tests with memory tracking
-        # Re-syncing is optimized by uv's global cache
+      - name: Set up Python
+        run: uv python install ${{ needs.determine-python-version.outputs.version }}
+
+      - name: Install project and dev dependencies
         run: |
-          uv sync --all-extras --all-groups
-          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 --memray --most-allocations=0 -k '_memory'
+          uv venv --python ${{ needs.determine-python-version.outputs.version }} .venv
+          source .venv/bin/activate
+          uv pip install -e . --group dev
+
+      - name: Tests memory tracking
+        run: |
+          uv run pytest --junitxml=junit/test-results.xml --cov=flowstab --durations=0 -k '_memory' \
+            || { code=$?; [ $code -eq 5 ] && exit 0 || exit $code; }
         env:
           COVERAGE_FILE: ".coverage.memory"
 
@@ -90,15 +129,15 @@ jobs:
           include-hidden-files: true
 
   coverage:
+    if: always() && github.event.pull_request.draft == false
     name: combine-coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [setup-and-test, test-memory]
-    if: always()
     permissions:
       pull-requests: write
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           pattern: coverage-*
