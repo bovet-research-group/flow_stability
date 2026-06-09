@@ -10,16 +10,16 @@ authors:
     orcid: ...
     affiliation: 1
   - name:
-      given-names: Juni
-      surname: Schindler
-    orcid: ...
-    affiliation: 1
-  - name:
       given-names: Jonas I. 
       surname: Liechti
     orcid: 0000-0003-3447-3060
     affiliation: 2 # (Multiple affiliations must be quoted)
     corresponding: true # (This is how to denote the corresponding author)
+  - name:
+      given-names: Juni
+      surname: Schindler
+    orcid: ...
+    affiliation: 1
   - name:
       given-names: Alexander
       surname: Bovet
