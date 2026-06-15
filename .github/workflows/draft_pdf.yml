@@ -1,7 +1,7 @@
 name: Draft PDF
 on:
   push:
-    branches: ["paper"]
+    branches: ["paper", "*paper*"]
 
 jobs:
   paper:
