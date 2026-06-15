@@ -40,18 +40,23 @@ bibliography: paper.bib
 
 # Summary
 
+_TODO_
 
 # Statement of need
 
+_TODO_
 
 # State of the field
 
+_TODO_
 
 # Software design
 
+_TODO_
 
 # Research impact statement
 
+_TODO_
 
 # AI usage disclosure
 
@@ -63,5 +68,6 @@ subsequently reviewed and edited by the authors.
 
 # Acknowledgements
 
+_TODO_
 
 # References
