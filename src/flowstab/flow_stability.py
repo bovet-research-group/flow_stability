@@ -45,11 +45,15 @@ ProcessException
 """
 from __future__ import annotations
 from typing import Any, Iterable, Iterator
-
 from copy import copy
-
+from collections import defaultdict
+import gc
+import multiprocessing
 
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
+import pygenstability as pgs
 
 from tempnet import ContTempNetwork
 
@@ -58,6 +62,8 @@ from .helpers import include_doc_from, inverted_iterator
 from .state_tracking import StateMeta, OrderedEnum
 from .network_clustering import (
     FlowIntegralClustering,
+    Clustering,
+    run_multi_louvain,
 )
 
 # get the logger
@@ -718,3 +724,271 @@ class FlowStability(metaclass=StateMeta, states=States):
                     _ts].find_louvain_clustering(**kwargs)
             logger.info("-> done.")
         return self
+    
+
+    def run(
+        self,
+        events_table,
+        min_scale=-2,
+        max_scale=0.5,
+        n_scale=20,
+        log_scale=True,
+        n_tries=100,
+        result_file="results.pkl",
+        n_workers=4,
+        n_NVI=20,
+        with_optimal_scales=True,
+        optimal_scales_kwargs=None,
+        with_all_tries=False,
+    ):
+        """Run the complete flow stability pipeline with scale selection.
+
+        Initializes the temporal network, computes Laplacian and
+        inter-transition matrices, runs forward and backward Louvain
+        clustering across all time scales, and optionally identifies
+        optimal scales via PyGenStability.
+
+        Parameters
+        ----------
+        events_table : pandas.DataFrame
+            Contact sequence with columns ``source_nodes``, ``target_nodes``,
+            ``starting_times``, and ``ending_times``.
+        min_scale, max_scale : float
+            Log-scale bounds for the scan. Defaults: -2, 0.5.
+        n_scale : int
+            Number of scales. Default: 20.
+        log_scale : bool
+            Use logarithmic spacing. Default: True.
+        n_tries : int
+            Louvain repetitions per scale. Default: 100.
+        result_file : str
+            Path for incremental pickle saves. Default: ``"results.pkl"``.
+        n_workers : int
+            Parallel workers for NVI computation. Default: 4.
+        n_NVI : int
+            Number of randomly sampled Louvain repetitions used to estimate
+            within-scale NVI. Default: 20.
+        with_optimal_scales : bool
+            Run optimal scale identification. Default: True.
+        optimal_scales_kwargs : dict or None
+            Forwarded to ``pgs.identify_optimal_scales``; defaults derived
+            from ``n_scale`` if None.
+        with_all_tries : bool
+            Store all Louvain partitions (not just best). Default: False.
+
+        Returns
+        -------
+        dict
+            Results dictionary mirroring the PyGenStability results dict,
+            with keys suffixed ``_f`` (forward) and ``_b`` (backward):
+
+            - ``run_params``: dict of parameters used for the run
+            - ``scales``: list of time scales of the scan
+            - ``community_id_f/b``: community node labels at each scale
+            - ``stability_f/b``: stability value at each scale
+            - ``number_of_communities_f/b``: number of communities at each scale
+            - ``NVI_f/b``: within-scale NVI(t), measuring variability across
+              Louvain repetitions
+            - ``ttprime_f/b``: NVI(t, t') matrix comparing community structure
+              across pairs of scales
+            - ``all_tries_f/b``: all Louvain partitions at each scale
+              (only if ``with_all_tries=True``)
+            - ``block_nvi_f/b``: block NVI curve for optimal scale detection
+              (only if ``with_optimal_scales=True``)
+            - ``selected_partitions_f/b``: indices of selected optimal scales
+              (only if ``with_optimal_scales=True``)
+        """
+        nodes = np.unique(
+            pd.concat([events_table["source_nodes"], events_table["target_nodes"]])
+        )
+        n_nodes = len(nodes)
+
+        # initialise results dictionary
+        all_results = defaultdict(list)
+
+        if log_scale:
+            scales = np.logspace(min_scale, max_scale, n_scale)
+        else:
+            scales = np.linspace(min_scale, max_scale, n_scale)
+
+        taus = 1 / scales
+
+        run_params = {
+            "min_scale": min_scale,
+            "max_scale": max_scale,
+            "n_scale": n_scale,
+            "log_scale": log_scale,
+            "n_tries": n_tries,
+            "n_workers": n_workers,
+            "n_NVI": n_NVI,
+        }
+
+        all_results["run_params"] = run_params
+        all_results["scales"] = scales.tolist()
+
+        # initilise and compute inter-transition matrices for all taus
+        self.set_temporal_network(events_table=events_table, relabel_nodes=True)
+        self.compute_laplacian_matrices()
+        self.set_time_scale(taus)
+        self.compute_inter_transition_matrices()
+        self.time_direction = 0
+        self.set_flow_clustering()
+        self._temporal_network.inter_T = None
+
+        # free up memory
+        gc.collect()
+
+        # create forward and backward results dictionaries
+        f_results = all_results.copy()
+        b_results = all_results.copy()
+
+        with multiprocessing.Pool(n_workers) as pool:
+
+            ###############
+            # forward run #
+            ###############
+
+            # compute forward partitions for all taus
+            for tau in tqdm(taus, desc="Computing forward partitions"):
+
+                clus_obj_for = self.flow_clustering_forward[tau]
+
+                # Run Louvain
+                _, cluster_lists, stabilities, _ = run_multi_louvain(
+                    Clustering(p1=clus_obj_for.p1, p2=None, S=clus_obj_for.I_list[0]),
+                    num_repeat=n_tries,
+                )
+
+                # Convert partitions to partition ID format
+                partitions_id = _convert_sets_to_community_id(cluster_lists, n_nodes)
+
+                # Find the partition with the highest stability
+                best_id = np.argmax(stabilities)
+                all_results["community_id_f"].append(partitions_id[best_id])
+                all_results["stability_f"].append(stabilities[best_id])
+                all_results["number_of_communities_f"].append(
+                    len(np.unique(partitions_id[best_id]))
+                )
+
+                if with_all_tries:
+                    all_results["all_tries_f"].append(partitions_id)
+
+                f_results["community_id"].append(partitions_id[best_id])
+
+                # Compute within-scales NVI
+                pgs.pygenstability._compute_NVI(
+                    partitions_id, f_results, pool, n_partitions=n_NVI
+                )
+                all_results["NVI_f"].append(f_results["NVI"][-1])
+
+                # free up memory
+                self._flow_clustering_forward[tau] = None
+                gc.collect()
+
+                # save results
+                pgs.save_results(all_results, filename=result_file)
+
+            # Compute across-scales NVI
+            pgs.pygenstability._compute_ttprime(f_results, pool)
+            all_results["ttprime_f"] = f_results["ttprime"]
+
+            # save results
+            pgs.save_results(all_results, filename=result_file)
+
+            ################
+            # backward run #
+            ################
+
+            # compute backward partitions for all taus
+            for tau in tqdm(taus, desc="Computing backward partitions"):
+
+                clus_obj_for = self.flow_clustering_backward[tau]
+
+                # Run Louvain
+                _, cluster_lists, stabilities, _ = run_multi_louvain(
+                    Clustering(p1=clus_obj_for.p1, p2=None, S=clus_obj_for.I_list[0]),
+                    num_repeat=n_tries,
+                )
+
+                # Convert partitions to partition ID format
+                partitions_id = _convert_sets_to_community_id(cluster_lists, n_nodes)
+
+                # Find the partition with the highest stability
+                best_id = np.argmax(stabilities)
+                all_results["community_id_b"].append(partitions_id[best_id])
+                all_results["stability_b"].append(stabilities[best_id])
+                all_results["number_of_communities_b"].append(
+                    len(np.unique(partitions_id[best_id]))
+                )
+
+                if with_all_tries:
+                    all_results["all_tries_b"].append(partitions_id)
+
+                b_results["community_id"].append(partitions_id[best_id])
+
+                # Compute within-scales NVI
+                pgs.pygenstability._compute_NVI(
+                    partitions_id, b_results, pool, n_partitions=n_NVI
+                )
+                all_results["NVI_b"].append(b_results["NVI"][-1])
+
+                # free up memory
+                self._flow_clustering_backward[tau] = None
+                gc.collect()
+
+                # save results
+                pgs.save_results(all_results, filename=result_file)
+
+            # Compute across-scales NVI
+            pgs.pygenstability._compute_ttprime(b_results, pool)
+            all_results["ttprime_b"] = b_results["ttprime"]
+
+            # save results
+            pgs.save_results(all_results, filename=result_file)
+
+        ###################
+        # scale selection #
+        ###################
+
+        # Release heavy intermediate data
+        self._temporal_network = None
+        self._flow_clustering_forward = {}
+        self._flow_clustering_backward = {}
+        gc.collect()
+
+        if with_optimal_scales:
+
+            # identify optimal scales
+            if optimal_scales_kwargs is None:
+                optimal_scales_kwargs = {
+                    "kernel_size": max(2, int(0.1 * n_scale)),
+                    "window_size": max(2, int(0.1 * n_scale)),
+                    "basin_radius": max(1, int(0.01 * n_scale)),
+                }
+
+            # identifiy optimal scales in forward partitions
+            f_results = pgs.identify_optimal_scales(f_results, **optimal_scales_kwargs)
+            all_results["block_nvi_f"] = f_results["block_nvi"]
+            all_results["selected_partitions_f"] = f_results["selected_partitions"]
+
+            # identifiy optimal scales in backward partitions
+            b_results = pgs.identify_optimal_scales(b_results, **optimal_scales_kwargs)
+            all_results["block_nvi_b"] = b_results["block_nvi"]
+            all_results["selected_partitions_b"] = b_results["selected_partitions"]
+
+            # save results
+            pgs.save_results(all_results, filename=result_file)
+
+        return all_results
+    
+
+def _convert_sets_to_community_id(partitions_set, N):
+    """Convert a list of partitions in set format to a list of community id arrays."""
+    partitions_id = []
+    for partition in partitions_set:
+        partition_id = np.zeros(N, dtype=int)
+        for cluster_id, cluster in enumerate(partition):
+            for node in cluster:
+                partition_id[node] = cluster_id
+        partitions_id.append(partition_id)
+    return partitions_id
