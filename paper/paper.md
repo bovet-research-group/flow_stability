@@ -45,12 +45,27 @@ The flow stability framework [@bovet_flow_2022] takes a different route. By exen
 Despite the method's adoption since its publication, the existing implementation was not easy to use. Here, by introducing `flowstab`, an installable, documented, and continuously tested Python implementation of the flow stability framework, we fill this gap and lower the barrier for researchers in network science, computational social science, science of science, and related fields to apply the method to their own temporal data.
 
 Technically, (say mathematically what do we do...)--> Should I?
+
 # Implementation
+The `flowstab` workflow proceeds in four stages, summarized in Figure 1. First, temporal interaction data is loaded into a `FlowStability` instance, which
+constructs and holds a `tempnet` instance representing the temporal network. The
+`tempnet` object stores the interactions at their finest availbale temporal resolution as a
+sequence of timestamped events, each given by a source node, a target node, and
+its activation interval.
 
-## Overall organization
-The Python package PyGenStability consists of four parts:
+Then, the `tempnet` implements a continous time random walk on the temporal network. First, the Laplacians of the continuous-time random walk are computed between successive events, after which the user selects one or more time scales; and the corresponding inter-transition matrices
+that propagate the walk with those scales are computed.
 
+Third, the inter-transition matrices are used to compute the integral of the
+covariance between node trajectories for a forward and backward process, which defines the flow stability quality function. Communities are then obtained by optimizing this quality function with
+the Louvain or Leiden algorithm [@arnaudon2024algorithm]. 
 
+Finally, a post-processing stage assesses the results across scales. The
+robustness of the detected communities is evaluated using Markov stability scale selection via an
+interface to `pygenstability` [@arnaudon2024algorithm] , from which the
+most robust scales are identified through the Normalized Variation of Information.
+The forward and backward partitions and their evolution across time can then be
+visualized as a Sankey diagram.
 # Validation and Testing
 
 A comprehensive set of documented case studies has been published to validate the `abn` package (see the `abn` [website](https://r-bayesian-networks.org/)).
