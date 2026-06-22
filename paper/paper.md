@@ -16,13 +16,6 @@ authors:
   orcid: 0000-0002-8728-9286
   affiliation: "1"
 
-- name: Samuel Koovely 
-  orcid: 0000-0002-5033-7790
-- name: Alexandre Bovet
-  orcid: 0000-0003-3937-3704
-  corresponding: true
-  affiliation: "1"
-
 - name: Jonas I. Liechti
   orcid: 0000-0003-3447-3060
   affiliation: "2"
@@ -51,7 +44,6 @@ Such methods are powerful and general, but temporal aggregation discards the pre
 The flow stability framework [@bovet_flow_2022] takes a different route. By exending the Markov stability framework [@delvenne2010stability], it employs a continuous-time random-walk process that evolves on the temporal network and is constrained by its activation pattern, so that the full ordering of interactions is preserved at the finest available resolution rather than aggregated away. Because the temporal evolution can induce asymmetric relationships between nodes (as stated before as the notion of `asymmetry of temporal paths`), the method yields two partitions for any time interval, a forward and a backward partition, and reveals distinct scales representing the dynamics, from finer to coarser community structure, by varying the rate of the random walk. 
 
 Despite the method's adoption since its publication, the existing implementation was not easy to use. Here, by introducing `flowstab`, an installable, documented, and continuously tested Python implementation of the flow stability framework, we fill this gap and lower the barrier for researchers in network science, computational social science, science of science, and related fields to apply the method to their own temporal data.
-
 # Implementation
 
 # Validation and Testing
