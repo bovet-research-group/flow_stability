@@ -47,6 +47,17 @@ Despite the method's adoption since its publication, the existing implementation
 Technically, (say mathematically what do we do...)--> Should I?
 
 # Implementation
+![The `flowstab` workflow. Temporal interaction data is loaded into a
+`FlowStability` instance holding a `tempnet` instance. The `tempnet` methods
+compute the Laplacians, select time scales, and build the inter-transition
+matrices. The co-clustering stage forms the integral of the covariance and
+applies the Louvain or Leiden algorithm to obtain forward and backward
+partitions. A post-processing stage then identifies robust scales via Markov
+stability (`pygenstability`) and the Normalized Variation of Information, and
+visualizes the partitions as a Sankey diagram. Steps shown in purple are
+`tempnet` methods; those in orange are `pygenstability`
+functions.\label{fig:workflow}](flowstab_workflow.pdf)
+
 The `flowstab` workflow proceeds in four stages, summarized in Figure 1. First, temporal interaction data is loaded into a `FlowStability` instance, which
 constructs and holds a `tempnet` instance representing the temporal network. The
 `tempnet` object stores the interactions at their finest availbale temporal resolution as a
