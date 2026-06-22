@@ -6,6 +6,18 @@ tags:
 - Temporal Network
 - Community Detection
 authors:
+
+- name: Yasaman Asgari
+  orcid: 0000-0002-5397-0778
+  corresponding: true
+  affiliation: "1"
+
+- name: Juni Schindler
+  orcid: 0000-0002-8728-9286
+  affiliation: "1"
+
+- name: Samuel Koovely 
+  orcid: 0000-0002-5033-7790
 - name: Alexandre Bovet
   orcid: 0000-0003-3937-3704
   corresponding: true
