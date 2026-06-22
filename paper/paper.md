@@ -68,39 +68,49 @@ This is done by first computing the Random Walk Laplacian of each inter-event $\
 For this purpose, the methods `compute_laplacian_matrices`, `compute_inter_transition_matrices` of `ContTempNetwork` are implemented in `tempnet`.
 
 The next step is to compute the temporal integral of the covariance matrices.
+Using the inter-event transition matrices we have just computed, we can find the
+transition matrix between any two event times. Considering that the grid of event
+times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two
+arbitrary event times between $t_s$ and $t_e$, we have
 
-Using the inter-event transition matrices we have just computed, we can find the transition matrix between any two event times. Considering that the grid of event times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two arbitrary event times between $t_s$ and $t_e$, we have
+$$\mathbf{T}(t_s, t_n) = \prod_{k=s}^{n-1} \hat{\mathbf{T}}(t_k, t_{k+1}).$$
 
-$$\mathbf{T}(t_s,t_n)=\prod^{n-1}_{k=s} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+The transition matrix of the reversed-time process starts at the end and is
+obtained by reversing the order of the products
 
-The transition matrix of the reversed time process starts at the end and is obtained by reversing the order of the products
+$$\mathbf{T}_{\mathrm{rev}}(t_e, t_m) = \prod_{k=e-1}^{m} \hat{\mathbf{T}}(t_k, t_{k+1}).$$
 
-$$\mathbf{T}_\text{rev}(t_e,t_m)=\prod_{k=e-1}^{k=m} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+Note that here $\hat{\mathbf{T}}(t_k, t_{k+1}) = \hat{\mathbf{T}}(t_{k+1}, t_k)$
+since events are undirected. The forward and backward covariance matrices are then
+given by
 
-Note that here $\hat{\mathbf{T}}(t_k,t_{k+1})=\hat{\mathbf{T}}(t_{k+1},t_{k})$ since events are undirected.
+$$\mathbf{S}_{\mathrm{forw}}(t_s, t_n) = \mathbf{P}(t_s)\, \mathbf{T}(t_s, t_n)\, \mathbf{P}(t_n)^{-1}\, \mathbf{T}(t_s, t_n)^{\mathsf{T}}\, \mathbf{P}(t_s) - \mathbf{p}(t_s)^{\mathsf{T}} \mathbf{p}(t_s)$$
 
-The forward and backward covariance matrices are then given by
+$$\mathbf{S}_{\mathrm{back}}(t_e, t_m) = \mathbf{P}(t_e)\, \mathbf{T}_{\mathrm{rev}}(t_e, t_m)\, \mathbf{P}(t_m)^{-1}\, \mathbf{T}_{\mathrm{rev}}(t_e, t_m)^{\mathsf{T}}\, \mathbf{P}(t_e) - \mathbf{p}(t_e)^{\mathsf{T}} \mathbf{p}(t_e)$$
 
-$$\mathbf{S}_\text{forw}(t_s,t_n)=\mathbf{P}(t_s)\mathbf{T}(t_s,t_n)\mathbf{P}(t_n)^{-1}\mathbf{T}(t_s,t_n)^\textsf{T}\mathbf{P}(t_s) - \mathbf{p}(t_s)^\textsf{T}\mathbf{p}(t_s)$$
+where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities
+for the forward and backward processes, respectively, here both taken as uniform.
+The forward and backward partitions are then found by clustering the integrals of
+the covariance matrices, i.e., finding the forward and backward partitions,
+$\mathbf{H}_{\mathrm{f}}$ and $\mathbf{H}_{\mathrm{b}}$, maximizing the flow
+stability functions with the Louvain or Leiden algorithm for the optimization
+[@arnaudon2024algorithm]:
 
-$$\mathbf{S}_\text{back}(t_e,t_m)=\mathbf{P}(t_e)\mathbf{T}_\text{rev}(t_e,t_m)\mathbf{P}(t_m)^{-1}\mathbf{T}_\text{rev}(t_e,t_m)^\textsf{T}\mathbf{P}(t_e) - \mathbf{p}(t_e)^\textsf{T}\mathbf{p}(t_e)$$
-
-where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities for the forward and backward processes, respectively, here both taken as uniform.
-
-The forward and backward partitions are then found by clustering the integrals of the covariance matrices, i.e., finding the forward and backward partitions, $\mathbf{H}_\text{f}$ and $\mathbf{H}_\text{b}$, maximizing the flow stability functions with the Louvain or Leiden algorithm for the optimization[@arnaudon2024algorithm]. 
 $$
-I^\text{flow}_\text{forw}(t_s,t_e,\mathbf{H}_\text{f})
-=\frac{1}{t_e-t_s}
-\text{trace}\left[
-\mathbf{H}^\textsf{T}_\text{f}\int_{t_s}^{t_e}\mathbf{S}_\text{forw}(t_s,t_n)dt_n\mathbf{H}_\text{f}
+I^{\mathrm{flow}}_{\mathrm{forw}}(t_s, t_e, \mathbf{H}_{\mathrm{f}})
+= \frac{1}{t_e - t_s}
+\operatorname{trace}\left[
+\mathbf{H}^{\mathsf{T}}_{\mathrm{f}} \int_{t_s}^{t_e} \mathbf{S}_{\mathrm{forw}}(t_s, t_n)\, dt_n\, \mathbf{H}_{\mathrm{f}}
 \right]
 $$
+
 and
+
 $$
-I^\text{flow}_\text{back}(t_s,t_e,\mathbf{H}_\text{f})
-=\frac{1}{t_e-t_s}
-\text{trace}\left[
-\mathbf{H}^\textsf{T}_\text{f}\int_{t_e}^{t_s}\mathbf{S}_\text{forw}(t_e,t_n)dt_n\mathbf{H}_\text{f}
+I^{\mathrm{flow}}_{\mathrm{back}}(t_s, t_e, \mathbf{H}_{\mathrm{b}})
+= \frac{1}{t_e - t_s}
+\operatorname{trace}\left[
+\mathbf{H}^{\mathsf{T}}_{\mathrm{b}} \int_{t_s}^{t_e} \mathbf{S}_{\mathrm{back}}(t_e, t_m)\, dt_m\, \mathbf{H}_{\mathrm{b}}
 \right].
 $$
 
@@ -116,7 +126,7 @@ visualized as a Sankey diagram.
 A comprehensive set of documented case studies has been published to validate the `abn` package (see the `abn` [website](https://r-bayesian-networks.org/)).
 The numerical accuracy and quality assurance exercises were demonstrated in @kratzer_additive_2023.
 A rigorous testing and linting procedure is implemented based on the `pytest` and `ruff` packages [@pytest8.3,@cite_ruff].
-The procedure is tiede to the development and release cycle through continuous integration pipelines thus asserting no untested changes are inserted into the code base.
+The procedure is tied to the development and release cycle through continuous integration pipelines, thus asserting no untested changes are inserted into the code base.
 Additional documentation and resources are available on the `abn` [website](https://r-bayesian-networks.org/) for further reference and guidance.
 An extended documentation and further resources (including and automated documentation of the code-base) are available on the 'flowstab` [website](https://flow-stability.readthedocs.io).
 
