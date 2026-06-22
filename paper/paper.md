@@ -67,50 +67,29 @@ The next step is to compute the inter-event transition matrices $\hat{\mathbf{T}
 This is done by first computing the Random Walk Laplacian of each inter-event $\mathbf{L}(t_k)$ and then the matrix exponential: $\hat{\mathbf{T}}(t_k,t_{k+1})=e^{-\lambda \mathbf{L}(t_k) \tau_k}$ (see "Flow modeling" in the methods of the paper [@bovet_flow_2022].
 For this purpose, the methods `compute_laplacian_matrices`, `compute_inter_transition_matrices` of `ContTempNetwork` are implemented in `tempnet`.
 
-The next step is to compute the temporal integral of the covariance matrices.
-Using the inter-event transition matrices we have just computed, we can find the
-transition matrix between any two event times. Considering that the grid of event
-times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two
-arbitrary event times between $t_s$ and $t_e$, we have
-
-$$\mathbf{T}(t_s, t_n) = \prod_{k=s}^{n-1} \hat{\mathbf{T}}(t_k, t_{k+1}).$$
-
-The transition matrix of the reversed-time process starts at the end and is
-obtained by reversing the order of the products
-
-$$\mathbf{T}_{\mathrm{rev}}(t_e, t_m) = \prod_{k=e-1}^{m} \hat{\mathbf{T}}(t_k, t_{k+1}).$$
-
-Note that here $\hat{\mathbf{T}}(t_k, t_{k+1}) = \hat{\mathbf{T}}(t_{k+1}, t_k)$
-since events are undirected. The forward and backward covariance matrices are then
-given by
-
-$$\mathbf{S}_{\mathrm{forw}}(t_s, t_n) = \mathbf{P}(t_s)\, \mathbf{T}(t_s, t_n)\, \mathbf{P}(t_n)^{-1}\, \mathbf{T}(t_s, t_n)^{\mathsf{T}}\, \mathbf{P}(t_s) - \mathbf{p}(t_s)^{\mathsf{T}} \mathbf{p}(t_s)$$
-
-$$\mathbf{S}_{\mathrm{back}}(t_e, t_m) = \mathbf{P}(t_e)\, \mathbf{T}_{\mathrm{rev}}(t_e, t_m)\, \mathbf{P}(t_m)^{-1}\, \mathbf{T}_{\mathrm{rev}}(t_e, t_m)^{\mathsf{T}}\, \mathbf{P}(t_e) - \mathbf{p}(t_e)^{\mathsf{T}} \mathbf{p}(t_e)$$
-
-where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities
-for the forward and backward processes, respectively, here both taken as uniform.
-The forward and backward partitions are then found by clustering the integrals of
-the covariance matrices, i.e., finding the forward and backward partitions,
-$\mathbf{H}_{\mathrm{f}}$ and $\mathbf{H}_{\mathrm{b}}$, maximizing the flow
-stability functions with the Louvain or Leiden algorithm for the optimization
-[@arnaudon2024algorithm]:
-
+Using the inter-event transition matrices we have just computed, we can find the transition matrix between any two event times. Considering that the grid of event times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two arbitrary event times between $t_s$ and $t_e$, we have
+$$\mathbf{T}(t_s,t_n)=\prod^{n-1}_{k=s} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+The transition matrix of the reversed time process starts at the end and is obtained by reversing the order of the products
+$$\mathbf{T}_\text{rev}(t_e,t_m)=\prod_{k=e-1}^{k=m} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+Note that here $\hat{\mathbf{T}}(t_k,t_{k+1})=\hat{\mathbf{T}}(t_{k+1},t_{k})$ since events are undirected.
+The forward and backward covariance matrices are then given by
+$$\mathbf{S}_\text{forw}(t_s,t_n)=\mathbf{P}(t_s)\mathbf{T}(t_s,t_n)\mathbf{P}(t_n)^{-1}\mathbf{T}(t_s,t_n)^\textsf{T}\mathbf{P}(t_s) - \mathbf{p}(t_s)^\textsf{T}\mathbf{p}(t_s)$$
+$$\mathbf{S}_\text{back}(t_e,t_m)=\mathbf{P}(t_e)\mathbf{T}_\text{rev}(t_e,t_m)\mathbf{P}(t_m)^{-1}\mathbf{T}_\text{rev}(t_e,t_m)^\textsf{T}\mathbf{P}(t_e) - \mathbf{p}(t_e)^\textsf{T}\mathbf{p}(t_e)$$
+where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities for the forward and backward processes, respectively, here both taken as uniform.
+The forward and backward partitions are then found by clustering the integrals of the covariance matrices, i.e., finding the forward and backward partitions, $\mathbf{H}_\text{f}$ and $\mathbf{H}_\text{b}$, maximizing the flow stability functions with the Louvain or Leiden algorithm for the optimization[@arnaudon2024algorithm]. 
 $$
-I^{\mathrm{flow}}_{\mathrm{forw}}(t_s, t_e, \mathbf{H}_{\mathrm{f}})
-= \frac{1}{t_e - t_s}
-\operatorname{trace}\left[
-\mathbf{H}^{\mathsf{T}}_{\mathrm{f}} \int_{t_s}^{t_e} \mathbf{S}_{\mathrm{forw}}(t_s, t_n)\, dt_n\, \mathbf{H}_{\mathrm{f}}
+I^\text{flow}_\text{forw}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_s}^{t_e}\mathbf{S}_\text{forw}(t_s,t_n)dt_n\mathbf{H}_\text{f}
 \right]
 $$
-
 and
-
 $$
-I^{\mathrm{flow}}_{\mathrm{back}}(t_s, t_e, \mathbf{H}_{\mathrm{b}})
-= \frac{1}{t_e - t_s}
-\operatorname{trace}\left[
-\mathbf{H}^{\mathsf{T}}_{\mathrm{b}} \int_{t_s}^{t_e} \mathbf{S}_{\mathrm{back}}(t_e, t_m)\, dt_m\, \mathbf{H}_{\mathrm{b}}
+I^\text{flow}_\text{back}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_e}^{t_s}\mathbf{S}_\text{forw}(t_e,t_n)dt_n\mathbf{H}_\text{f}
 \right].
 $$
 
