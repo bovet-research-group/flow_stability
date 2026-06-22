@@ -34,13 +34,13 @@ bibliography: paper.bib
 # Statement of need
 Temporal networks model systems whose interactions change over time [@holme2012temporal], such as human contact patterns (who we meet), transportation flows (where  we go), research collaborations (with whom we collaborate), and digital communication through social media, phone calls, and text messages (with whom we communicate). They are represented as nodes (entities) joined by edges (interactions) that carry timing information (when the interaction happened and for how long). 
 
-Analyses of such temporal networks typically begin at two scales. Local measures describe individual nodes and their neighborhoods, for example which other nodes a given node interacted within a period, or whether its connections close into triangles. Global measures characterize the network as a whole, for example the number of edges or active nodes per unit time, or whether activity is bursty or evenly spread over time. Yet, as in many areas of data analysis, neither the local nor the global view captures how a system is actually organized. That organization lives at the mesoscale, and one of main organization concepts is community structure [@lancichinetti2009community, @delvenne2010stability, @girvan2002community]: groups of nodes that interact more densely among themselves than with the rest of the network, such as a circle of friends within a school or a discipline within a collaboration network.
+Analyses of such temporal networks typically begin at two scales. Local measures describe individual nodes and their neighborhoods, for example, which other nodes a given node interacted with in a period, or whether its connections close into triangles. Global measures characterize the network as a whole, for example, the number of edges or active nodes per unit time, or whether activity is bursty or evenly spread over time. Yet, as in many areas of data analysis, neither the local nor the global view captures how a system is actually organized. That organization lives at the mesoscale, and one of the main organization concepts is community structure [@lancichinetti2009community, @delvenne2010stability, @girvan2002community]: groups of nodes that interact more densely among themselves than with the rest of the network, such as a circle of friends within a school or a discipline within a collaboration network.
 
-Detecting communities in temporal networks is therefore a central task, but most existing approaches reduce the temporal dimension before clustering, with a few exceptions of new developments [@brabant2025longitudinal]. They either aggregate interactions into static snapshots over fixed time windows and identify communities using static techniques and sticht them using evolution rules (instant-optimal), or they consider the network and the communities found in the previous step to identify communities in the current one (temporal trade off), These strategies underlie the dynamic community detection facilities in widely used libraries such as CDlib [@rossetti_cdlib_2019] and tnetwork [@tnetwork]. 
+Detecting communities in temporal networks is therefore a central task, but most existing approaches reduce the temporal dimension before clustering, with a few recent developments [@brabant2025longitudinal]. They either aggregate interactions into static snapshots over fixed time windows and identify communities using static techniques and sticht them using evolution rules (instant-optimal), or they consider the network and the communities found in the previous step to identify communities in the current one (temporal trade off), These strategies underlie the dynamic community detection facilities in widely used libraries such as CDlib [@rossetti_cdlib_2019] and tnetwork [@tnetwork]. 
 
 Such methods are powerful and general, but temporal aggregation discards the precise ordering of events, and the assumption of a stationary state does not hold for many real systems[@bovet_flow_2022]. Crucially, aggregation also breaks the notion of a temporal path. If node $u$ contacts $v$ at time $t_1$ and $v$ contacts $w$ at a later time $t_2$, then information can flow from $u$ to $w$ through $v$; but if $v-w$ occurs before $u-v$, no such flow is possible. A static aggregation collapses both cases into the same connected triple, representing a path that may never have existed.
 
-The flow stability framework [@bovet_flow_2022] takes a different route. By exending the Markov stability framework [@delvenne2010stability], it employs a continuous-time random-walk process that evolves on the temporal network and is constrained by its activation pattern, so that the full ordering of interactions is preserved at the finest available resolution rather than aggregated away. Because the temporal evolution can induce asymmetric relationships between nodes (as stated before as the notion of *asymmetry of temporal paths*), the method yields two partitions for any time interval, a forward and a backward partition, and reveals distinct scales representing the dynamics, from finer to coarser community structure, by varying the rate of the random walk. 
+The flow stability framework [@bovet_flow_2022] takes a different route. By extending the Markov stability framework [@delvenne2010stability], it employs a continuous-time random-walk process that evolves on the temporal network and is constrained by its activation pattern, thereby preserving the full ordering of interactions at the finest available resolution rather than aggregating it away. Because the temporal evolution can induce asymmetric relationships between nodes (as stated before, as the notion of *asymmetry of temporal paths*), the method yields two partitions for any time interval, a forward and a backward partition, and reveals distinct scales representing the dynamics, from finer to coarser community structure, by varying the rate of the random walk. 
 
 Despite the method's adoption since its publication, the existing implementation was not easy to use. Here, by introducing `flowstab`, an installable, documented, and continuously tested Python implementation of the flow stability framework, we fill this gap and lower the barrier for researchers in network science, computational social science, science of science, and related fields to apply the method to their own temporal data.
 
@@ -59,20 +59,54 @@ functions.\label{fig:workflow}](flowstab_workflow.pdf)
 
 The `flowstab` workflow proceeds in four stages, summarized in Figure 1. First, temporal interaction data is loaded into a `FlowStability` instance, which
 constructs and holds a `tempnet` instance representing the temporal network. The
-`tempnet` object stores the interactions at their finest availbale temporal resolution as a
+`tempnet` object stores the interactions at their finest available temporal resolution as a
 sequence of timestamped events, each given by a source node, a target node, and
-its activation interval.
+Its activation interval.
 
-Then, the `tempnet` implements a continous time random walk on the temporal network. First, the Laplacians of the continuous-time random walk are computed between successive events, after which the user selects one or more time scales; and the corresponding inter-transition matrices
-that propagate the walk with those scales are computed.
+The next step is to compute the inter-event transition matrices $\hat{\mathbf{T}}(t_k,t_{k+1})$. 
+This is done by first computing the Random Walk Laplacian of each inter-event $\mathbf{L}(t_k)$ and then the matrix exponential: $\hat{\mathbf{T}}(t_k,t_{k+1})=e^{-\lambda \mathbf{L}(t_k) \tau_k}$ (see "Flow modeling" in the methods of the paper [@bovet_flow_2022].
+For this purpose, the methods `compute_laplacian_matrices`, `compute_inter_transition_matrices` of `ContTempNetwork` are implemented in `tempnet`.
 
-Third, the inter-transition matrices are used to compute the integral of the
-covariance between node trajectories for a forward and backward process, which defines the flow stability quality function. Communities are then obtained by optimizing this quality function with
-the Louvain or Leiden algorithm [@arnaudon2024algorithm]. 
+The next step is to compute the temporal integral of the covariance matrices.
+
+Using the inter-event transition matrices we have just computed, we can find the transition matrix between any two event times. Considering that the grid of event times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two arbitrary event times between $t_s$ and $t_e$, we have
+
+$$\mathbf{T}(t_s,t_n)=\prod^{n-1}_{k=s} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+
+The transition matrix of the reversed time process starts at the end and is obtained by reversing the order of the products
+
+$$\mathbf{T}_\text{rev}(t_e,t_m)=\prod_{k=e-1}^{k=m} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+
+Note that here $\hat{\mathbf{T}}(t_k,t_{k+1})=\hat{\mathbf{T}}(t_{k+1},t_{k})$ since events are undirected.
+
+The forward and backward covariance matrices are then given by
+
+$$\mathbf{S}_\text{forw}(t_s,t_n)=\mathbf{P}(t_s)\mathbf{T}(t_s,t_n)\mathbf{P}(t_n)^{-1}\mathbf{T}(t_s,t_n)^\textsf{T}\mathbf{P}(t_s) - \mathbf{p}(t_s)^\textsf{T}\mathbf{p}(t_s)$$
+
+$$\mathbf{S}_\text{back}(t_e,t_m)=\mathbf{P}(t_e)\mathbf{T}_\text{rev}(t_e,t_m)\mathbf{P}(t_m)^{-1}\mathbf{T}_\text{rev}(t_e,t_m)^\textsf{T}\mathbf{P}(t_e) - \mathbf{p}(t_e)^\textsf{T}\mathbf{p}(t_e)$$
+
+where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities for the forward and backward processes, respectively, here both taken as uniform.
+
+The forward and backward partitions are then found by clustering the integrals of the covariance matrices, i.e., finding the forward and backward partitions, $\mathbf{H}_\text{f}$ and $\mathbf{H}_\text{b}$, maximizing the flow stability functions with the Louvain or Leiden algorithm for the optimization[@arnaudon2024algorithm]. 
+$$
+I^\text{flow}_\text{forw}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_s}^{t_e}\mathbf{S}_\text{forw}(t_s,t_n)dt_n\mathbf{H}_\text{f}
+\right]
+$$
+and
+$$
+I^\text{flow}_\text{back}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_e}^{t_s}\mathbf{S}_\text{forw}(t_e,t_n)dt_n\mathbf{H}_\text{f}
+\right].
+$$
 
 Finally, a post-processing stage assesses the results across scales. The
 robustness of the detected communities is evaluated using Markov stability's automated scale selection via an
-interface to `pygenstability` [@arnaudon2024algorithm], from which the
+interface to `pygenstability` [@arnaudon2024algorithm], from which the 
 most robust scales are identified through the Normalized Variation of Information.
 The forward and backward partitions and their evolution across time can then be
 visualized as a Sankey diagram.
