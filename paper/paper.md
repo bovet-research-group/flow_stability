@@ -22,18 +22,19 @@ authors:
   orcid: 0000-0003-3937-3704
   corresponding: true
   affiliation: "1"
+
 - name: Jonas I. Liechti
   orcid: 0000-0003-3447-3060
   affiliation: "2"
+
 affiliations:
  - name: Department of Mathematical Modeling and Machine Learning, University of Zurich, Zürich, Switzerland
    index: 1
  - name: www.T4D.ch, T4D GmbH, Zurich, Switzerland
    index: 2
-date: 14. August 2024
+date: 22. June 2026
 bibliography: paper.bib
 ---
-
 # Summary
 The python package `flowstab` is ...
 
@@ -66,9 +67,16 @@ pip install git+https://github.com/alexbovet/flow_stability.git
 Alternatively, `flowstab` is also available on [PyPi](https://pypi.org).
 
 
+
+
 # Acknowledgments
 
-...
+
+# AI usage disclosure
+No generative AI tools were used in the development of this software.
+AI-assisted tools were used to format some of the source code docstrings
+and to support the drafting of portions of this manuscript, which were
+subsequently reviewed and edited by the authors.
 
 # References
 
