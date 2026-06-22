@@ -52,8 +52,7 @@ Technically, (say mathematically what do we do...)--> Should I?
 compute the Laplacians, select time scales, and build the inter-transition
 matrices. The co-clustering stage forms the integral of the covariance and
 applies the Louvain or Leiden algorithm to obtain forward and backward
-partitions. A post-processing stage then identifies robust scales via Markov
-stability (`pygenstability`) and the Normalized Variation of Information, and
+partitions. A post-processing stage then identifies robust scales using Normalized Variation of Information (`pygenstability`) and the , and
 visualizes the partitions as a Sankey diagram. Steps shown in purple are
 `tempnet` methods; those in orange are `pygenstability`
 functions.\label{fig:workflow}](flowstab_workflow.pdf)
