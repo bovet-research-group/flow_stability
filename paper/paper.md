@@ -61,11 +61,12 @@ covariance between node trajectories for a forward and backward process, which d
 the Louvain or Leiden algorithm [@arnaudon2024algorithm]. 
 
 Finally, a post-processing stage assesses the results across scales. The
-robustness of the detected communities is evaluated using Markov stability scale selection via an
-interface to `pygenstability` [@arnaudon2024algorithm] , from which the
+robustness of the detected communities is evaluated using Markov stability's automated scale selection via an
+interface to `pygenstability` [@arnaudon2024algorithm], from which the
 most robust scales are identified through the Normalized Variation of Information.
 The forward and backward partitions and their evolution across time can then be
 visualized as a Sankey diagram.
+
 # Validation and Testing
 
 A comprehensive set of documented case studies has been published to validate the `abn` package (see the `abn` [website](https://r-bayesian-networks.org/)).
