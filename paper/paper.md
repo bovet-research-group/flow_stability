@@ -6,40 +6,106 @@ tags:
 - Temporal Network
 - Community Detection
 authors:
-- name: Alexandre Bovet
-  orcid: 0000-0003-3937-3704
+
+- name: Yasaman Asgari
+  orcid: 0000-0002-5397-0778
   corresponding: true
   affiliation: "1"
+
+- name: Juni Schindler
+  orcid: 0000-0002-8728-9286
+  affiliation: "1"
+
 - name: Jonas I. Liechti
   orcid: 0000-0003-3447-3060
   affiliation: "2"
+
 affiliations:
  - name: Department of Mathematical Modeling and Machine Learning, University of Zurich, Zürich, Switzerland
    index: 1
  - name: www.T4D.ch, T4D GmbH, Zurich, Switzerland
    index: 2
-date: 14. August 2024
+date: 22. June 2026
 bibliography: paper.bib
 ---
-
 # Summary
-The python package `flowstab` is ...
+`flowstab` is a Python package for detecting and analyzing communities in temporal networks, that is, networks whose connections change over time. Rather than aggregating interactions into static snapshots, it preserves the finest available temporal resolution of the data and implements the flow stability framework for dynamic community detection [@bovet_flow_2022]. The package is organized around two core components: a temporal-network component (`tempnet`) for representing and manipulating temporal network data, and a sparse-matrix component (`stochmat`) that accelerates the underlying computations and `pygenstability` [@arnaudon2024algorithm] for detecting robust scales. 
 
 # Statement of need
+Temporal networks model systems whose interactions change over time [@holme2012temporal], such as human contact patterns (who we meet), transportation flows (where  we go), research collaborations (with whom we collaborate), and digital communication through social media, phone calls, and text messages (with whom we communicate). They are represented as nodes (entities) joined by edges (interactions) that carry timing information (when the interaction happened and for how long). 
 
-... 
+Analyses of such temporal networks typically begin at two scales. Local measures describe individual nodes and their neighborhoods, for example, which other nodes a given node interacted with in a period, or whether its connections close into triangles. Global measures characterize the network as a whole, for example, the number of edges or active nodes per unit time, or whether activity is bursty or evenly spread over time. Yet, as in many areas of data analysis, neither the local nor the global view captures how a system is actually organized. That organization lives at the mesoscale, and one of the main organization concepts is community structure [@lancichinetti2009community, @delvenne2010stability, @girvan2002community]: groups of nodes that interact more densely among themselves than with the rest of the network, such as a circle of friends within a school or a discipline within a collaboration network.
 
-In summary, `flowstab` ...
+Detecting communities in temporal networks is therefore a central task, but most existing approaches reduce the temporal dimension before clustering, with a few recent developments [@brabant2025longitudinal]. They either aggregate interactions into static snapshots over fixed time windows and identify communities using static techniques and sticht them using evolution rules (instant-optimal), or they consider the network and the communities found in the previous step to identify communities in the current one (temporal trade off), These strategies underlie the dynamic community detection facilities in widely used libraries such as CDlib [@rossetti_cdlib_2019] and tnetwork [@tnetwork]. 
+
+Such methods are powerful and general, but temporal aggregation discards the precise ordering of events, and the assumption of a stationary state does not hold for many real systems[@bovet_flow_2022]. Crucially, aggregation also breaks the notion of a temporal path. If node $u$ contacts $v$ at time $t_1$ and $v$ contacts $w$ at a later time $t_2$, then information can flow from $u$ to $w$ through $v$; but if $v-w$ occurs before $u-v$, no such flow is possible. A static aggregation collapses both cases into the same connected triple, representing a path that may never have existed.
+
+The flow stability framework [@bovet_flow_2022] takes a different route. By extending the Markov stability framework [@delvenne2010stability], it employs a continuous-time random-walk process that evolves on the temporal network and is constrained by its activation pattern, thereby preserving the full ordering of interactions at the finest available resolution rather than aggregating it away. Because the temporal evolution can induce asymmetric relationships between nodes (as stated before, as the notion of *asymmetry of temporal paths*), the method yields two partitions for any time interval, a forward and a backward partition, and reveals distinct scales representing the dynamics, from finer to coarser community structure, by varying the rate of the random walk. 
+
+Despite the method's adoption since its publication, the existing implementation was not easy to use. Here, by introducing `flowstab`, an installable, documented, and continuously tested Python implementation of the flow stability framework, we fill this gap and lower the barrier for researchers in network science, computational social science, science of science, and related fields to apply the method to their own temporal data.
+
+Technically, (say mathematically what do we do...)--> Should I?
 
 # Implementation
-...
+![The `flowstab` workflow. Temporal interaction data is loaded into a
+`FlowStability` instance holding a `tempnet` instance. The `tempnet` methods
+compute the Laplacians, select time scales, and build the inter-transition
+matrices. The co-clustering stage forms the integral of the covariance and
+applies the Louvain or Leiden algorithm to obtain forward and backward
+partitions. A post-processing stage then identifies robust scales using Normalized Variation of Information (`pygenstability`) and the , and
+visualizes the partitions as a Sankey diagram. Steps shown in purple are
+`tempnet` methods; those in orange are `pygenstability`
+functions.\label{fig:workflow}](flowstab_workflow.pdf)
+
+The `flowstab` workflow proceeds in four stages, summarized in Figure 1. First, temporal interaction data is loaded into a `FlowStability` instance, which
+constructs and holds a `tempnet` instance representing the temporal network. The
+`tempnet` object stores the interactions at their finest available temporal resolution as a
+sequence of timestamped events, each given by a source node, a target node, and
+Its activation interval.
+
+The next step is to compute the inter-event transition matrices $\hat{\mathbf{T}}(t_k,t_{k+1})$. 
+This is done by first computing the Random Walk Laplacian of each inter-event $\mathbf{L}(t_k)$ and then the matrix exponential: $\hat{\mathbf{T}}(t_k,t_{k+1})=e^{-\lambda \mathbf{L}(t_k) \tau_k}$ (see "Flow modeling" in the methods of the paper [@bovet_flow_2022].
+For this purpose, the methods `compute_laplacian_matrices`, `compute_inter_transition_matrices` of `ContTempNetwork` are implemented in `tempnet`.
+
+Using the inter-event transition matrices we have just computed, we can find the transition matrix between any two event times. Considering that the grid of event times starts with $t_s$, ends with $t_e$, and that $t_n$ and $t_m$ are two arbitrary event times between $t_s$ and $t_e$, we have
+$$\mathbf{T}(t_s,t_n)=\prod^{n-1}_{k=s} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+The transition matrix of the reversed time process starts at the end and is obtained by reversing the order of the products
+$$\mathbf{T}_\text{rev}(t_e,t_m)=\prod_{k=e-1}^{k=m} \hat{\mathbf{T}}(t_k,t_{k+1}).$$
+Note that here $\hat{\mathbf{T}}(t_k,t_{k+1})=\hat{\mathbf{T}}(t_{k+1},t_{k})$ since events are undirected.
+The forward and backward covariance matrices are then given by
+$$\mathbf{S}_\text{forw}(t_s,t_n)=\mathbf{P}(t_s)\mathbf{T}(t_s,t_n)\mathbf{P}(t_n)^{-1}\mathbf{T}(t_s,t_n)^\textsf{T}\mathbf{P}(t_s) - \mathbf{p}(t_s)^\textsf{T}\mathbf{p}(t_s)$$
+$$\mathbf{S}_\text{back}(t_e,t_m)=\mathbf{P}(t_e)\mathbf{T}_\text{rev}(t_e,t_m)\mathbf{P}(t_m)^{-1}\mathbf{T}_\text{rev}(t_e,t_m)^\textsf{T}\mathbf{P}(t_e) - \mathbf{p}(t_e)^\textsf{T}\mathbf{p}(t_e)$$
+where $\mathbf{p}(t_s)$ and $\mathbf{p}(t_e)$ are the initial probability densities for the forward and backward processes, respectively, here both taken as uniform.
+The forward and backward partitions are then found by clustering the integrals of the covariance matrices, i.e., finding the forward and backward partitions, $\mathbf{H}_\text{f}$ and $\mathbf{H}_\text{b}$, maximizing the flow stability functions with the Louvain or Leiden algorithm for the optimization[@arnaudon2024algorithm]. 
+$$
+I^\text{flow}_\text{forw}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_s}^{t_e}\mathbf{S}_\text{forw}(t_s,t_n)dt_n\mathbf{H}_\text{f}
+\right]
+$$
+and
+$$
+I^\text{flow}_\text{back}(t_s,t_e,\mathbf{H}_\text{f})
+=\frac{1}{t_e-t_s}
+\text{trace}\left[
+\mathbf{H}^\textsf{T}_\text{f}\int_{t_e}^{t_s}\mathbf{S}_\text{forw}(t_e,t_n)dt_n\mathbf{H}_\text{f}
+\right].
+$$
+
+Finally, a post-processing stage assesses the results across scales. The
+robustness of the detected communities is evaluated using Markov stability's automated scale selection via an
+interface to `pygenstability` [@arnaudon2024algorithm], from which the 
+most robust scales are identified through the Normalized Variation of Information.
+The forward and backward partitions and their evolution across time can then be
+visualized as a Sankey diagram.
 
 # Validation and Testing
 
 A comprehensive set of documented case studies has been published to validate the `abn` package (see the `abn` [website](https://r-bayesian-networks.org/)).
 The numerical accuracy and quality assurance exercises were demonstrated in @kratzer_additive_2023.
 A rigorous testing and linting procedure is implemented based on the `pytest` and `ruff` packages [@pytest8.3,@cite_ruff].
-The procedure is tiede to the development and release cycle through continuous integration pipelines thus asserting no untested changes are inserted into the code base.
+The procedure is tied to the development and release cycle through continuous integration pipelines, thus asserting no untested changes are inserted into the code base.
 Additional documentation and resources are available on the `abn` [website](https://r-bayesian-networks.org/) for further reference and guidance.
 An extended documentation and further resources (including and automated documentation of the code-base) are available on the 'flowstab` [website](https://flow-stability.readthedocs.io).
 
@@ -56,7 +122,12 @@ Alternatively, `flowstab` is also available on [PyPi](https://pypi.org).
 
 # Acknowledgments
 
-...
+
+# AI usage disclosure
+No generative AI tools were used in the development of this software.
+AI-assisted tools were used to format some of the source code docstrings
+and to support the drafting of portions of this manuscript, which were
+subsequently reviewed and edited by the authors.
 
 # References
 
