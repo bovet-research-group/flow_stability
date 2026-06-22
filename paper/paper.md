@@ -36,7 +36,7 @@ date: 22. June 2026
 bibliography: paper.bib
 ---
 # Summary
-The python package `flowstab` is ...
+`flowstab` is a Python package for detecting and analyzing communities in temporal networks, that is, networks whose connections change over time. Rather than aggregating interactions into static snapshots, it preserves the finest available temporal resolution of the data and implements the flow stability framework for dynamic community detection [@bovet_flow_2022]. The package is organized around two core components: a temporal-network component (`tempnet`) for representing and manipulating temporal network data, and a sparse-matrix component (`stochmat`) that accelerates the underlying computations.
 
 # Statement of need
 
