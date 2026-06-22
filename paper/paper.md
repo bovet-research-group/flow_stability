@@ -38,14 +38,23 @@ bibliography: paper.bib
 # Summary
 `flowstab` is a Python package for detecting and analyzing communities in temporal networks, that is, networks whose connections change over time. Rather than aggregating interactions into static snapshots, it preserves the finest available temporal resolution of the data and implements the flow stability framework for dynamic community detection [@bovet_flow_2022]. The package is organized around two core components: a temporal-network component (`tempnet`) for representing and manipulating temporal network data, and a sparse-matrix component (`stochmat`) that accelerates the underlying computations.
 
+
 # Statement of need
+Temporal networks model systems whose interactions change over time [@holme2012temporal], such as human contact patterns (who we meet), transportation flows (where  we go), research collaborations (with whom we collaborate), and digital communication through social media, phone calls, and text messages (with whom we communicate). They are represented as nodes (entities) joined by edges (interactions) that carry timing information (when the interaction happened and for how long). 
 
-... 
+Analyses of such temporal networks typically begin at two scales. Local measures describe individual nodes and their neighborhoods, for example which other nodes a given node interacted within a period, or whether its connections close into triangles. Global measures characterize the network as a whole, for example the number of edges or active nodes per unit time, or whether activity is bursty or evenly spread over time. Yet, as in many areas of data analysis, neither the local nor the global view captures how a system is actually organized. That organization lives at the mesoscale, and one of main organization concepts is community structure [@delvenne2010stability]: groups of nodes that interact more densely among themselves than with the rest of the network, such as a circle of friends within a school or a discipline within a collaboration network.
 
-In summary, `flowstab` ...
+Detecting communities in temporal networks is therefore a central task, but most existing approaches reduce the temporal dimension before clustering, with a few exceptions of new developments [@brabant2025longitudinal]. They either aggregate interactions into static snapshots over fixed time windows and identify communities using static techniques and sticht them using evolution rules (instant-optimal), or they consider the network and the communities found in the previous step to identify communities in the current one (temporal trade off), These strategies underlie the dynamic community detection facilities in widely used libraries such as CDlib [@rossetti_cdlib_2019] and tnetwork [@tnetwork]. 
+
+Such methods are powerful and general, but temporal aggregation discards the precise ordering of events, and the assumption of a stationary state does not hold for many real systems[@bovet_flow_2022]. Crucially, aggregation also breaks the notion of a temporal path. If node $u$ contacts $v$ at time $t_1$ and $v$ contacts $w$ at a later time $t_2$, then information can flow from $u$ to $w$ through $v$; but if $v$–$w$ occurs before $u$–$v$, no such flow is possible. A static aggregation collapses both cases into the same connected triple, representing a path that may never have existed.
+
+The flow stability framework [@bovet_flow_2022] takes a different route. It defines a continuous-time random-walk process that evolves on the temporal network and is constrained by its activation pattern, so that the full ordering of interactions is preserved at the finest available resolution rather than aggregated away. Because the temporal evolution can induce asymmetric relationships between nodes (as stated before `asymmetry of temporal paths`), the method yields two partitions for any time interval, a forward and a backward partition, and reveals distinct dynamical scales, from finer to coarser community structure, by varying the rate of the random walk. 
+
+Despite the method's adoption since its publication, the existing implementation was not easy to use. Here, by introducing `flowstab`, an installable, documented, and continuously tested Python implementation of the flow stability framework, we lower the barrier for researchers in network science, computational social science, science of science, and related fields to apply the method to their own temporal data.
+
 
 # Implementation
-...
+
 
 # Validation and Testing
 
@@ -65,8 +74,6 @@ The package can be installed directly from GitHub with `pip`:
 pip install git+https://github.com/alexbovet/flow_stability.git
 ```
 Alternatively, `flowstab` is also available on [PyPi](https://pypi.org).
-
-
 
 
 # Acknowledgments
