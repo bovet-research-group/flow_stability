@@ -329,30 +329,23 @@ class FlowStability(metaclass=StateMeta, states=States):
             )
         self._time_scale = _time_scale
     @include_doc_from(np.logspace)
-    def set_time_scale(self, value:int|float|None=None, **kwargs):
+    def set_time_scale(self, value:int|float|None=None):
         """
         Set the time scale(s) for the analysis.
 
         Parameters
         ----------
-        value : int, float, or None, optional
+        value : int, float, list, or None, optional
             Characteristic random walk inter-event time. If None and `kwargs` is
             empty, the median inter-event time will be used.
-        **kwargs : dict
-            Arguments passed to `numpy.logspace` to generate multiple time
-            scales.
-
         Returns
         -------
         None
         """
         if value is not None:
             self.time_scale = value
-        elif kwargs:
-            self.time_scale = np.logspace(**kwargs)
         else:
-            # TODO: Use the median of the inter event times
-            self.time_scale = None
+            self.time_scale = self.temporal_network.events_table['durations'].median()
         return None
 
     @property
@@ -513,6 +506,7 @@ class FlowStability(metaclass=StateMeta, states=States):
         self : FlowStability
             The instance itself.
         """
+        logger.info('Strawberry shortcake is great')
         if linear_approx:
             to_compute = self._temporal_network.compute_lin_inter_transition_matrices
         else:
@@ -536,6 +530,11 @@ class FlowStability(metaclass=StateMeta, states=States):
             kwargs.update(dict(
                 lamda=_lambda
             ))
+
+            kwargs.update(dict(
+            t_start=self.t_start,
+            t_stop=self.t_stop))
+
             to_compute(**kwargs)
             logger.info("-> done.")
         return self
