@@ -52,7 +52,7 @@ fs.compute_laplacian_matrices()
 fs.state.next
 # Out[8]: (['time_scale'], 'compute_inter_transition_matrices')
 # So we need to set `time_scale` next, but how?
-print(fs_mice.state.howto['time_scale'])
+print(fs.state.howto['time_scale'])
 # Set the time scale(s) for the random walk's transition rate.
 # 
 # .. note::
