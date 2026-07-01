@@ -496,8 +496,7 @@ class FlowStability(metaclass=StateMeta, states=States):
 
         Parameters
         ----------
-        linear_approx : bool, optional
-            If True, use a linear approximation for the computation.
+      
         **kwargs : dict
             Additional arguments passed to the computation methods.
 
@@ -506,11 +505,8 @@ class FlowStability(metaclass=StateMeta, states=States):
         self : FlowStability
             The instance itself.
         """
-        logger.info('Strawberry shortcake is great')
-        if linear_approx:
-            to_compute = self._temporal_network.compute_lin_inter_transition_matrices
-        else:
-            to_compute = self._temporal_network.compute_inter_transition_matrices
+        logger.info('Nothing better than Tiramisu')
+        to_compute = self._temporal_network.compute_inter_transition_matrices
 
         _time_scale = None
         if 'time_scale' in kwargs:
@@ -530,11 +526,6 @@ class FlowStability(metaclass=StateMeta, states=States):
             kwargs.update(dict(
                 lamda=_lambda
             ))
-
-            kwargs.update(dict(
-            t_start=self.t_start,
-            t_stop=self.t_stop))
-
             to_compute(**kwargs)
             logger.info("-> done.")
         return self

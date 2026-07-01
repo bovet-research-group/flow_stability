@@ -4,7 +4,7 @@
 #
 # Flow stability for dynamic community detection https://arxiv.org/abs/2101.06131v2
 #
-# Copyright (C) 2021 Alexandre Bovet <alexandre.bovet@maths.ox.ac.uk>
+# Copyright (C) 2021 Alexandre Bovet <alexandre.bovet@uzh.ch>
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU Lesser General Public License as published by the Free
