@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 # Now we pass the whole table to :class:`FlowStability`. We restrict ourselves to first
 # 30 minutes of the interactions by setting the `t_stop=1800`. 
 
-fs = FlowStability(t_start=None, t_stop=180)
+fs = FlowStability(t_start=None, t_stop=1800)
 fs.set_temporal_network(events_table=event_table, relabel_nodes=True)
 
 n_nodes = fs.temporal_network.num_nodes
@@ -150,8 +150,6 @@ print(fs.state.next)
 # optimise.
 fs.help("set_flow_clustering")
 fs.set_flow_clustering()
-fs._temporal_network.inter_T = None
-gc.collect()
 
 # %%
 # Find the communities
